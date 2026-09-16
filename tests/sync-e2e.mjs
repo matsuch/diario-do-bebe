@@ -116,6 +116,41 @@ try {
     if (!/por Mamãe/.test(textoB || '')) falhas.push('o card do sono em B deveria dizer quem começou');
   }
 
+  // A corrige o início da soneca em andamento (antecipa): o cronômetro de B
+  // tem que passar a contar do novo início, sem a soneca ter encerrado.
+  await A.click('.tab[data-view="agora"]'); // o propagar deixou A nos Ajustes
+  await A.click('#timeline .item.is-live .item-edit');
+  const inicioNovo = await A.evaluate(() => {
+    const d = new Date(Date.now() - 42 * 60000);
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  });
+  await A.fill('#sheetBody input[name="at"]', inicioNovo);
+  await A.click('#sheetBody button[type="submit"]');
+  const inicioEmA = (await sonoAtivo(A)).startAt;
+  const viuCorrecao = await propagar(A, B, async () => {
+    const emB = await sonoAtivo(B);
+    return !!emB && emB.startAt === inicioEmA;
+  }, 'B não recebeu a correção do início da soneca');
+  if (viuCorrecao) {
+    // O que interessa é o cronômetro: os dois contam do mesmo instante.
+    const decorridos = await Promise.all([A, B].map(async (p) => {
+      await p.click('.tab[data-view="agora"]');
+      return p.evaluate(() => {
+        const s = JSON.parse(localStorage.getItem('rotina-bebe:v1')).activeSleep;
+        return Math.round((Date.now() - s.startAt) / 60000);
+      });
+    }));
+    if (Math.abs(decorridos[0] - decorridos[1]) > 1) {
+      falhas.push(`os cronômetros discordam: A=${decorridos[0]}min, B=${decorridos[1]}min`);
+    }
+    if (decorridos[1] < 41 || decorridos[1] > 43) {
+      falhas.push(`B deveria estar contando ~42min depois da correção (contou ${decorridos[1]})`);
+    }
+    const textoB = await B.textContent('#nextCards');
+    if (!/0:4[12]/.test(textoB || '')) falhas.push(`o cronômetro na tela de B não acompanhou a correção: "${textoB}"`);
+  }
+
   // A encerra: a soneca some do celular de B e vira registro nos dois.
   await A.click('.tab[data-view="agora"]'); // o propagar deixou A nos Ajustes
   await A.click('.quick[data-quick="sono"]');

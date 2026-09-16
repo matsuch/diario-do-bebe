@@ -95,12 +95,20 @@ perfil (nome, remédios, ajustes) sincroniza por última-edição-vence.
 
 **O que está em andamento também aparece nos dois.** Mamada, soneca e arroto viram
 registro só quando encerram — mas o cronômetro rodando é sincronizado à parte, um por
-tipo: quem inicia a soneca no celular dele faz ela surgir no dela na mesma hora (com
-*por Fulano*, se o aparelho tiver apelido em **Ajustes → Quem usa este aparelho**), e
-quem encerra apaga dos dois. Enquanto algum cronômetro está rodando o app pergunta ao
-servidor a cada 4s em vez de 12s (e a cada 30s em segundo plano, para poupar bateria).
-O robô dos avisos também respeita isso: ninguém recebe "hora da mamada" enquanto o
-outro já está amamentando.
+tipo: quem inicia a soneca no celular dele faz ela surgir no dela (com *por Fulano*, se
+o aparelho tiver apelido em **Ajustes → Quem usa este aparelho**), quem corrige o
+início muda o cronômetro dos dois, e quem encerra apaga dos dois.
+
+O relógio em si não depende da rede: os dois celulares contam a partir do mesmo
+instante de início, cada um no seu tique de 1s — se lá marca 10 min, aqui marca 10 min.
+Só as viradas viajam (começou, corrigi, encerrei), e elas vão na hora: ~150ms para
+subir, e o outro lado pergunta a cada 1,5s com cronômetro rodando, 5s com o app aberto
+e parado, 30s em segundo plano (tela apagada gasta pouca bateria e poucos dados — e ao
+voltar para o app a busca é imediata). Se quiser mexer nesse equilíbrio, é a constante
+`INTERVALO` em [`assets/js/sync.js`](assets/js/sync.js).
+
+O robô dos avisos também respeita o que está em andamento: ninguém recebe "hora da
+mamada" enquanto o outro já está amamentando.
 
 > Sincronização é **opcional**. Sem ela, o app segue funcionando local e offline. Ela
 > só funciona quando publicado na Vercel (o GitHub Pages não roda backend).

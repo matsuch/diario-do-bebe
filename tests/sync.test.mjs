@@ -7,8 +7,12 @@
  */
 import assert from 'node:assert';
 import { applySync, sanitizeEvent, sanitizeActive } from '../lib/sync-core.mjs';
-import { mergeIncoming, collectDirty, hashObj, collectActive, ativoPendente, intervaloAtual, INTERVALO } from '../assets/js/sync.js';
-import { state, startFeed, toggleSleep, applyRemoteActive, activeTimers } from '../assets/js/store.js';
+import {
+  mergeIncoming, collectDirty, hashObj, collectActive, ativoPendente,
+  intervaloAtual, INTERVALO, atrasoDoPush, ATRASO_PUSH,
+  enable, disable, syncOnce,
+} from '../assets/js/sync.js';
+import { state, startFeed, toggleSleep, applyRemoteActive, activeTimers, setOngoingStart, MS_MIN } from '../assets/js/store.js';
 
 let falhas = 0;
 async function teste(nome, fn) {
@@ -220,6 +224,63 @@ await teste('applyRemoteActive liga e desliga o cronômetro vindo do outro celul
   assert.equal(applyRemoteActive('sleep', null), true, 'o outro encerrou');
   assert.equal(state.activeSleep, null);
   assert.equal(applyRemoteActive('xpto', { startAt: 1 }), false, 'tipo desconhecido é ignorado');
+});
+
+await teste('ciclo real: corrigir o início chega ao servidor e nada é reenviado à toa', async () => {
+  // Um "celular" de verdade: o syncOnce do app falando com o applySync do
+  // servidor por um fetch de mentira, que guarda tudo o que foi empurrado.
+  const db = fakeDb();
+  const enviados = [];
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    enviados.push(body);
+    const out = await applySync(db, { familyKey: FAM, since: body.since, events: body.events, profile: body.profile, active: body.active });
+    return { ok: true, json: async () => out };
+  };
+
+  try {
+    state.events = [];
+    state.activeFeed = null; state.activeSleep = null; state.activeBurp = null;
+    await enable('codigo-de-teste');
+
+    toggleSleep();                       // A começa a soneca
+    await syncOnce();
+    const inicio = state.activeSleep.startAt;
+    assert.deepEqual(enviados.at(-1).active, { sleep: { startAt: inicio, by: '' } }, 'a soneca deveria ter sido empurrada');
+
+    await syncOnce();                    // nada mudou desde então
+    assert.equal(enviados.at(-1).active, null, 'não pode ficar reempurrando a mesma soneca a cada ciclo');
+
+    const novoInicio = setOngoingStart('sleep', inicio - 2 * MS_MIN); // antecipa 2 min
+    await syncOnce();
+    assert.equal(enviados.at(-1).active.sleep.startAt, novoInicio, 'a correção do início precisa subir');
+
+    // É isto que o outro celular puxaria agora:
+    const outroCelular = await applySync(db, { familyKey: FAM, since: 0 });
+    const soneca = outroCelular.active.find((a) => a.kind === 'sleep');
+    assert.equal(soneca.data.startAt, novoInicio, 'B veria o início já corrigido');
+
+    toggleSleep();                       // A encerra: vira evento e apaga o andamento
+    await syncOnce();
+    assert.equal(enviados.at(-1).active.sleep, null, 'encerrar precisa apagar o andamento no outro celular');
+    const depois = await applySync(db, { familyKey: FAM, since: 0 });
+    assert.equal(depois.active.find((a) => a.kind === 'sleep').data, null);
+    assert.equal(depois.events.filter((e) => e.data.type === 'sleep').length, 1, 'e virar um registro de sono');
+  } finally {
+    disable();
+    globalThis.fetch = fetchOriginal;
+    state.events = [];
+    state.activeSleep = null;
+  }
+});
+
+await teste('mexer no cronômetro vai quase sem espera; digitação nos ajustes não', () => {
+  state.activeFeed = null; state.activeSleep = null; state.activeBurp = null;
+  assert.equal(atrasoDoPush(), ATRASO_PUSH.normal, 'sem cronômetro pendente, mantém o debounce');
+  toggleSleep();
+  assert.equal(atrasoDoPush(), ATRASO_PUSH.andamento, 'começar a soneca não pode esperar 1,5s');
+  state.activeSleep = null;
 });
 
 await teste('o sync acelera enquanto tem cronômetro rodando', () => {

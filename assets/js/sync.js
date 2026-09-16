@@ -19,15 +19,30 @@ import { state, save, ACTIVE_KINDS, activeTimer, activeTimers, applyRemoteActive
 const BK_KEY = 'rotina-bebe:sync';
 const ENDPOINT = './api/sync';
 
-/** De quanto em quanto tempo perguntamos ao servidor o que mudou. */
+/**
+ * De quanto em quanto tempo perguntamos ao servidor o que mudou.
+ *
+ * O relógio de um cronômetro NÃO depende da rede: os dois celulares contam a
+ * partir do mesmo `startAt` (epoch), cada um no seu `setInterval` de 1s. O que
+ * precisa viajar é só a virada — começou, encerrou, corrigi o início —, e é
+ * por isso que dá para perguntar de segundo em segundo só quando alguém está
+ * de fato olhando: com a tela apagada o navegador marca a aba como oculta.
+ */
 export const INTERVALO = {
-  andamento: 4000,   // tem cronômetro rodando (ou coisa a enviar): o parceiro precisa ver agora
-  normal: 12000,     // app aberto, nada acontecendo
-  oculto: 30000,     // app em segundo plano: economiza bateria e dados
+  andamento: 1500,   // app aberto com cronômetro rodando: o outro lado vê quase na hora
+  normal: 5000,      // app aberto e parado: é aqui que chega a soneca que o outro acabou de começar
+  oculto: 30000,     // segundo plano/tela apagada: economiza bateria e dados
+};
+
+/** Espera antes de empurrar uma alteração local. */
+export const ATRASO_PUSH = {
+  andamento: 150,    // começou/encerrou/corrigiu um cronômetro: vai na hora
+  normal: 1500,      // digitação nos ajustes: espera a pessoa terminar
 };
 
 let bk = carregarBk();       // { enabled, familyCode, since, profileHash, activeHash }
 let sincronizando = false;
+let pedidoDuranteVoo = false; // mexeram no app enquanto a requisição corria
 let aplicando = false;       // evita que o save() do próprio sync agende outro sync
 let ultimoStatus = { estado: 'off', em: 0, pendentes: 0, erro: '' };
 const ouvintes = new Set();
@@ -171,7 +186,10 @@ function pendentes() {
 }
 
 export async function syncOnce() {
-  if (!isEnabled() || sincronizando) return;
+  if (!isEnabled()) return;
+  // Encerrar a soneca no meio de uma requisição não pode ficar esperando o
+  // próximo polling: assim que esta terminar, a gente manda de novo.
+  if (sincronizando) { pedidoDuranteVoo = true; return; }
   sincronizando = true;
   setStatus('sync');
   const codigoNoInicio = bk.familyCode; // se mudar no meio do voo, descartamos a resposta
@@ -256,14 +274,26 @@ export async function syncOnce() {
     setStatus('erro', { pendentes: pendentes(), erro: err.message });
   } finally {
     sincronizando = false;
+    agendarProximo(); // a cadência muda conforme o que está rodando agora
+    if (pedidoDuranteVoo) { pedidoDuranteVoo = false; triggerSoon(); }
   }
 }
 
+/**
+ * Quanto esperar antes de empurrar. Ligar/desligar/corrigir um cronômetro é a
+ * virada que o outro celular está esperando, então vai quase sem espera; o
+ * debounce maior existe para não mandar uma requisição por tecla digitada nos
+ * ajustes.
+ */
+export function atrasoDoPush(ms = ATRASO_PUSH.normal) {
+  return ACTIVE_KINDS.some((k) => ativoPendente(k)) ? ATRASO_PUSH.andamento : ms;
+}
+
 let debounce = null;
-export function triggerSoon(ms = 1500) {
+export function triggerSoon(ms = ATRASO_PUSH.normal) {
   if (!isEnabled() || aplicando) return; // não reagenda a partir do save() do próprio sync
   clearTimeout(debounce);
-  debounce = setTimeout(syncOnce, ms);
+  debounce = setTimeout(syncOnce, atrasoDoPush(ms));
 }
 
 /**
@@ -278,7 +308,9 @@ export function intervaloAtual() {
 }
 
 let proximo = null;
+let loopLigado = false;
 function agendarProximo() {
+  if (!loopLigado) return;
   clearTimeout(proximo);
   proximo = setTimeout(async () => {
     if (isEnabled()) await syncOnce();
@@ -288,6 +320,7 @@ function agendarProximo() {
 
 /** Liga o loop: intervalo adaptativo + ao focar o app. Chamado uma vez no boot. */
 export function start() {
+  loopLigado = true;
   if (isEnabled()) { setStatus('sync'); syncOnce(); }
   agendarProximo();
   document.addEventListener('visibilitychange', () => {
