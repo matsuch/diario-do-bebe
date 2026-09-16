@@ -10,6 +10,15 @@ celulares e avisos automáticos são opcionais.
 
 **No ar:** https://baby-routine-three.vercel.app
 
+  <tr>
+    <td>
+      <img height="600" alt="Rotina Bebe" src="https://github.com/user-attachments/assets/9b04d3a8-4c2f-4fc3-a009-d644084e8e35" />
+    </td>
+    <td>
+      <img height="600" alt="Rotina Bebe 2" src="https://github.com/user-attachments/assets/536acd40-8f33-4603-913f-fb45e1631057" />
+    </td>
+  </tr>
+
 ## O que ele faz
 
 | Tela | Para quê |
