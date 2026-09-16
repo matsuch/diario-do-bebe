@@ -5,7 +5,10 @@ intervalos diferentes (6h, 8h, 12h), fraldas e sono** — tudo em uma tela só, 
 contagem regressiva, para não precisar fazer conta às 3 da manhã.
 
 É um site que funciona como app: **instala na tela de início, abre offline e salva
-tudo no próprio celular** (nenhum dado sai do aparelho, nenhuma conta, nenhum servidor).
+tudo no próprio celular**. Sem conta e sem servidor obrigatório: sincronização entre
+celulares e avisos automáticos são opcionais.
+
+**No ar:** https://baby-routine-three.vercel.app
 
 ## O que ele faz
 
@@ -106,18 +109,29 @@ use **o mesmo código** nos dois (gere um no primeiro e copie para o segundo) �
 > ⚠️ Quem tiver o código acessa os dados da família — use um código difícil de
 > adivinhar e não o compartilhe fora do casal.
 
-A cada `git push` na branch principal, a Vercel republica sozinha (como o Pages).
+A cada `git push` na branch principal, a Vercel republica sozinha.
 
-## Publicar de graça (GitHub Pages)
+## Avisos automáticos (cron)
 
-O repositório já vem com o workflow `.github/workflows/pages.yml`, que liga o Pages
-sozinho (`enablement: true`) no primeiro push na branch principal. O app fica em
-`https://<seu-usuario>.github.io/baby-routine/`.
+A função `api/cron.js` calcula, a partir do estado sincronizado da rotina, quais
+avisos estão na hora e os envia pelo ntfy. Quem a dispara é o workflow
+[`.github/workflows/push-cron.yml`](.github/workflows/push-cron.yml), que "cutuca"
+o endpoint periodicamente.
 
-Se o deploy falhar com *"Get Pages site failed"*, ative uma vez à mão em
-**Settings → Pages → Source: GitHub Actions** e rode o workflow de novo.
+| Onde | Variável | Valor |
+|---|---|---|
+| Vercel | `PUSH_CRON_SECRET` | segredo compartilhado com o despertador |
+| GitHub → Secrets and variables → Actions | `PUSH_CRON_SECRET` | o mesmo valor |
+| GitHub (opcional) | `PUSH_CRON_URL` | se o domínio da Vercel mudar |
 
-Como é tudo estático, também funciona em qualquer hospedagem de arquivos.
+O agendamento do GitHub atrasa bastante; para cadência precisa, aponte um pinger
+externo gratuito (ex.: cron-job.org) para a mesma URL com o header
+`Authorization: Bearer <PUSH_CRON_SECRET>`.
+
+## Hospedagem só estática
+
+Sem sincronização e sem cron, o app é só arquivos estáticos e funciona em qualquer
+hospedagem (GitHub Pages, Netlify etc.).
 
 ## Rodar e testar localmente
 
@@ -142,7 +156,10 @@ assets/js/ntfy.js          push simples via ntfy.sh (imediato e agendado)
 assets/js/wa.js            adaptador de WhatsApp (WAHA/Evolution) — usado no app e no worker
 assets/js/sync.js          sincronização entre celulares (cliente do /api/sync)
 api/sync.js                função serverless da Vercel (sincroniza via Neon)
+api/cron.js                função serverless que envia os avisos automáticos
 lib/sync-core.mjs          núcleo do sync (sem dependências, testável)
+lib/agenda-core.mjs        cálculo da agenda de mamadas e doses
+lib/cron-core.mjs          núcleo dos avisos automáticos
 db/schema.sql              esquema do Postgres (Neon)
 vercel.json                config da Vercel
 sw.js                      service worker (abre offline)

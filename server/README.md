@@ -29,8 +29,8 @@ Pré-requisitos: uma VPS com Docker e Docker Compose, e um domínio apontando pa
 (recomendado, para ter HTTPS).
 
 ```bash
-git clone https://github.com/matsuch/baby-routine.git
-cd baby-routine/server
+git clone https://github.com/matsuch/diario-do-bebe.git
+cd diario-do-bebe/server
 cp .env.example .env
 nano .env            # defina WAHA_API_KEY (segredo forte) e, se quiser, WORKER_TOKEN
 ```
