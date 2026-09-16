@@ -42,6 +42,16 @@ function ensureSchema() {
         primary key (family_key, id)
       )`;
       await sql`create index if not exists events_family_updated on events (family_key, updated_at)`;
+      // Cronômetros em andamento (mamada/sono/arroto): uma linha por tipo, para
+      // que o que está acontecendo AGORA apareça no celular do parceiro.
+      await sql`create table if not exists active_timers (
+        family_key text not null,
+        kind text not null,
+        data jsonb,
+        updated_at timestamptz not null default now(),
+        primary key (family_key, kind)
+      )`;
+      await sql`create index if not exists active_family_updated on active_timers (family_key, updated_at)`;
     })().catch((err) => { schemaPronto = null; throw err; });
   }
   return schemaPronto;
@@ -85,6 +95,23 @@ const db = {
       on conflict (family_key)
       do update set profile = excluded.profile, profile_updated_at = now()`;
   },
+  async getActiveSince(key, sinceMs) {
+    const r = await sql`
+      select kind, data, extract(epoch from updated_at) * 1000 as u
+      from active_timers
+      where family_key = ${key} and updated_at > to_timestamp(${sinceMs} / 1000.0)
+      order by updated_at asc`;
+    return r.map((row) => ({ kind: row.kind, data: row.data, updatedMs: Number(row.u) }));
+  },
+  async upsertActive(key, items) {
+    for (const a of items) {
+      await sql`
+        insert into active_timers (family_key, kind, data, updated_at)
+        values (${key}, ${a.kind}, ${a.data == null ? null : JSON.stringify(a.data)}::jsonb, now())
+        on conflict (family_key, kind)
+        do update set data = excluded.data, updated_at = now()`;
+    }
+  },
 };
 
 async function lerCorpo(req) {
@@ -114,6 +141,7 @@ export default async function handler(req, res) {
       since: body.since,
       events: body.events,
       profile: body.profile,
+      active: body.active,
     });
     return res.status(200).json(resultado);
   } catch (err) {

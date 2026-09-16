@@ -5,29 +5,64 @@
  * concilia com o servidor (Vercel + Neon) por polling. Se não houver código
  * configurado (ou o servidor não existir), o app funciona igual, offline.
  *
- * Eventos: cada um carrega `updatedAt` e `_dirty`; exclusão é tombstone
- * (`deleted`). Empurramos os `_dirty`, puxamos o que mudou desde o cursor, e
- * mesclamos por id — nada é sobrescrito quando os dois registram ao mesmo tempo.
+ * Três canais, cada um com sua regra:
+ *  - Eventos: cada um carrega `updatedAt` e `_dirty`; exclusão é tombstone
+ *    (`deleted`). Empurramos os `_dirty`, puxamos o que mudou desde o cursor, e
+ *    mesclamos por id — nada é sobrescrito quando os dois registram ao mesmo tempo.
+ *  - Perfil (bebê/ajustes/remédios): última-edição-vence, no todo.
+ *  - EM ANDAMENTO (mamada, sono, arroto): última-edição-vence por tipo. É o que
+ *    faz a soneca que ela começou no celular dela aparecer no celular dele —
+ *    e sumir dos dois quando qualquer um encerrar.
  */
-import { state, save } from './store.js';
+import { state, save, ACTIVE_KINDS, activeTimer, activeTimers, applyRemoteActive } from './store.js';
 
 const BK_KEY = 'rotina-bebe:sync';
 const ENDPOINT = './api/sync';
 
-let bk = carregarBk();       // { enabled, familyCode, since, profileHash }
+/**
+ * De quanto em quanto tempo perguntamos ao servidor o que mudou.
+ *
+ * O relógio de um cronômetro NÃO depende da rede: os dois celulares contam a
+ * partir do mesmo `startAt` (epoch), cada um no seu `setInterval` de 1s. O que
+ * precisa viajar é só a virada — começou, encerrou, corrigi o início —, e é
+ * por isso que dá para perguntar de segundo em segundo só quando alguém está
+ * de fato olhando: com a tela apagada o navegador marca a aba como oculta.
+ */
+export const INTERVALO = {
+  andamento: 1500,   // app aberto com cronômetro rodando: o outro lado vê quase na hora
+  normal: 5000,      // app aberto e parado: é aqui que chega a soneca que o outro acabou de começar
+  oculto: 30000,     // segundo plano/tela apagada: economiza bateria e dados
+};
+
+/** Espera antes de empurrar uma alteração local. */
+export const ATRASO_PUSH = {
+  andamento: 150,    // começou/encerrou/corrigiu um cronômetro: vai na hora
+  normal: 1500,      // digitação nos ajustes: espera a pessoa terminar
+};
+
+let bk = carregarBk();       // { enabled, familyCode, since, profileHash, activeHash }
 let sincronizando = false;
+let pedidoDuranteVoo = false; // mexeram no app enquanto a requisição corria
 let aplicando = false;       // evita que o save() do próprio sync agende outro sync
 let ultimoStatus = { estado: 'off', em: 0, pendentes: 0, erro: '' };
 const ouvintes = new Set();
+const ouvintesRemoto = new Set();
 
 export function onStatus(fn) { ouvintes.add(fn); }
 function emitir() { ouvintes.forEach((fn) => fn(ultimoStatus)); }
 
+/** Avisa a UI que um cronômetro mudou no OUTRO celular: [{ kind, data, by }]. */
+export function onRemoteActive(fn) { ouvintesRemoto.add(fn); }
+function emitirRemoto(mudancas) {
+  if (mudancas.length) ouvintesRemoto.forEach((fn) => fn(mudancas));
+}
+
 function carregarBk() {
+  const base = { enabled: false, familyCode: '', since: 0, profileHash: '', activeHash: {} };
   try {
-    return { enabled: false, familyCode: '', since: 0, profileHash: '', ...JSON.parse(localStorage.getItem(BK_KEY) || '{}') };
+    return { ...base, ...JSON.parse(localStorage.getItem(BK_KEY) || '{}') };
   } catch {
-    return { enabled: false, familyCode: '', since: 0, profileHash: '' };
+    return base;
   }
 }
 function salvarBk() {
@@ -37,7 +72,7 @@ function salvarBk() {
 /* ------------------------------------------------------------------ helpers puros */
 
 export function hashObj(obj) {
-  const s = JSON.stringify(obj);
+  const s = JSON.stringify(obj ?? null);
   let h = 5381;
   for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return String(h >>> 0);
@@ -82,6 +117,35 @@ export function mergeIncoming(localEvents, incoming) {
   return aplicados;
 }
 
+/* ------------------------------------------------- em andamento (cronômetros) */
+
+function hashAtivos() {
+  const atuais = activeTimers();
+  return Object.fromEntries(ACTIVE_KINDS.map((k) => [k, hashObj(atuais[k])]));
+}
+
+/**
+ * Este cronômetro mudou aqui e o servidor ainda não sabe?
+ * Um tipo que nunca sincronizou e está parado NÃO conta como mudança: senão o
+ * celular que acabou de ligar o sync mandaria "não tem nada rodando" e apagaria
+ * a soneca que o parceiro já tinha começado.
+ */
+export function ativoPendente(kind, hashes = hashAtivos()) {
+  const conhecido = bk.activeHash[kind];
+  if (conhecido === undefined) return activeTimer(kind) != null;
+  return hashes[kind] !== conhecido;
+}
+
+/** Os cronômetros a empurrar neste sync ({} se nenhum mudou). `null` = encerrei. */
+export function collectActive(hashes = hashAtivos()) {
+  const atuais = activeTimers();
+  const payload = {};
+  for (const kind of ACTIVE_KINDS) {
+    if (ativoPendente(kind, hashes)) payload[kind] = atuais[kind];
+  }
+  return payload;
+}
+
 /* ------------------------------------------------------------------ ciclo de sync */
 
 function setStatus(estado, extra = {}) {
@@ -104,6 +168,7 @@ export function enable(codigo) {
   bk.familyCode = String(codigo || '').trim();
   bk.since = 0;
   bk.profileHash = '';
+  bk.activeHash = {}; // desconhecido: empurra só o que estiver rodando aqui
   state.events.forEach((e) => { e._dirty = true; });
   salvarBk();
   save();
@@ -121,18 +186,25 @@ function pendentes() {
 }
 
 export async function syncOnce() {
-  if (!isEnabled() || sincronizando) return;
+  if (!isEnabled()) return;
+  // Encerrar a soneca no meio de uma requisição não pode ficar esperando o
+  // próximo polling: assim que esta terminar, a gente manda de novo.
+  if (sincronizando) { pedidoDuranteVoo = true; return; }
   sincronizando = true;
   setStatus('sync');
   const codigoNoInicio = bk.familyCode; // se mudar no meio do voo, descartamos a resposta
   const cursorNoInicio = bk.since;
   const dirty = collectDirty();
-  const perfilMudou = hashObj(profileData()) !== bk.profileHash;
+  const perfilHashEnviado = hashObj(profileData());
+  const perfilMudou = perfilHashEnviado !== bk.profileHash;
+  const hashesAoEnviar = hashAtivos();
+  const ativosEnviados = collectActive(hashesAoEnviar);
   const payload = {
     familyCode: bk.familyCode,
     since: bk.since,
     events: dirty,
     profile: perfilMudou ? { data: profileData() } : null,
+    active: Object.keys(ativosEnviados).length ? ativosEnviados : null,
   };
   const idsEnviados = new Map(dirty.map((e) => [e.id, e.updatedAt]));
 
@@ -160,7 +232,10 @@ export async function syncOnce() {
 
     if (Array.isArray(data.events) && data.events.length) mergeIncoming(state.events, data.events);
 
-    // Perfil: aplica se o servidor tem algo diferente e não há edição local pendente.
+    // Perfil: o servidor já tem o que enviamos, então é isso que passa a ser o
+    // "sincronizado". Se o usuário editou no meio do voo, o hash local fica
+    // diferente e a edição é empurrada no próximo ciclo (em vez de se perder).
+    if (perfilMudou) bk.profileHash = perfilHashEnviado;
     if (data.profile && data.profile.data) {
       const localHash = hashObj(profileData());
       const localPendente = localHash !== bk.profileHash;
@@ -170,33 +245,86 @@ export async function syncOnce() {
           settings: data.profile.data.settings ?? state.settings,
           meds: data.profile.data.meds ?? state.meds,
         });
+        bk.profileHash = hashObj(profileData());
       }
     }
 
+    // Em andamento: confirma o que empurramos e aplica o que o outro celular fez.
+    const hashesAgora = hashAtivos();
+    for (const kind of Object.keys(ativosEnviados)) {
+      if (hashesAgora[kind] === hashesAoEnviar[kind]) bk.activeHash[kind] = hashesAoEnviar[kind];
+    }
+    const mudancasRemotas = [];
+    for (const inc of (Array.isArray(data.active) ? data.active : [])) {
+      if (!ACTIVE_KINDS.includes(inc.kind)) continue;
+      if (ativoPendente(inc.kind)) continue; // mexeram aqui depois: o local vence e reenvia
+      const mudou = applyRemoteActive(inc.kind, inc.data);
+      bk.activeHash[inc.kind] = hashObj(activeTimer(inc.kind));
+      if (mudou) mudancasRemotas.push({ kind: inc.kind, data: inc.data ?? null, by: inc.data?.by || '' });
+    }
+
     bk.since = Number(data.now) || bk.since;
-    bk.profileHash = hashObj(profileData());
     salvarBk();
     aplicando = true;
     save();            // persiste + re-renderiza, sem reagendar outro sync
     aplicando = false;
+    emitirRemoto(mudancasRemotas);
     setStatus('ok', { pendentes: pendentes(), erro: '' });
   } catch (err) {
     setStatus('erro', { pendentes: pendentes(), erro: err.message });
   } finally {
     sincronizando = false;
+    agendarProximo(); // a cadência muda conforme o que está rodando agora
+    if (pedidoDuranteVoo) { pedidoDuranteVoo = false; triggerSoon(); }
   }
 }
 
-let debounce = null;
-export function triggerSoon(ms = 1500) {
-  if (!isEnabled() || aplicando) return; // não reagenda a partir do save() do próprio sync
-  clearTimeout(debounce);
-  debounce = setTimeout(syncOnce, ms);
+/**
+ * Quanto esperar antes de empurrar. Ligar/desligar/corrigir um cronômetro é a
+ * virada que o outro celular está esperando, então vai quase sem espera; o
+ * debounce maior existe para não mandar uma requisição por tecla digitada nos
+ * ajustes.
+ */
+export function atrasoDoPush(ms = ATRASO_PUSH.normal) {
+  return ACTIVE_KINDS.some((k) => ativoPendente(k)) ? ATRASO_PUSH.andamento : ms;
 }
 
-/** Liga o loop: intervalo + ao focar o app. Chamado uma vez no boot. */
-export function start(intervaloMs = 12000) {
+let debounce = null;
+export function triggerSoon(ms = ATRASO_PUSH.normal) {
+  if (!isEnabled() || aplicando) return; // não reagenda a partir do save() do próprio sync
+  clearTimeout(debounce);
+  debounce = setTimeout(syncOnce, atrasoDoPush(ms));
+}
+
+/**
+ * De quanto em quanto tempo vale a pena perguntar de novo. Enquanto alguém
+ * está mamando/dormindo (aqui ou no outro celular) a gente acelera: é justo
+ * o momento em que os dois precisam estar vendo a mesma coisa.
+ */
+export function intervaloAtual() {
+  if (typeof document !== 'undefined' && document.hidden) return INTERVALO.oculto;
+  const rodando = ACTIVE_KINDS.some((k) => activeTimer(k) != null);
+  return rodando || pendentes() ? INTERVALO.andamento : INTERVALO.normal;
+}
+
+let proximo = null;
+let loopLigado = false;
+function agendarProximo() {
+  if (!loopLigado) return;
+  clearTimeout(proximo);
+  proximo = setTimeout(async () => {
+    if (isEnabled()) await syncOnce();
+    agendarProximo();
+  }, intervaloAtual());
+}
+
+/** Liga o loop: intervalo adaptativo + ao focar o app. Chamado uma vez no boot. */
+export function start() {
+  loopLigado = true;
   if (isEnabled()) { setStatus('sync'); syncOnce(); }
-  setInterval(() => { if (isEnabled()) syncOnce(); }, intervaloMs);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncOnce(); });
+  agendarProximo();
+  document.addEventListener('visibilitychange', () => {
+    agendarProximo();                       // volta para a cadência de app aberto
+    if (!document.hidden) syncOnce();
+  });
 }
