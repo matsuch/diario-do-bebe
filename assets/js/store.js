@@ -58,9 +58,13 @@ function estadoInicial() {
     },
     meds: MEDS_PADRAO.map((m) => ({ active: true, startAt: Date.now(), ...m })),
     events: [],
-    activeFeed: null,   // { startAt, side, segments: [{side, min}] }
-    activeSleep: null,  // { startAt }
-    activeBurp: null,   // { startAt } — cronômetro de arroto
+    // Quem está mexendo neste aparelho ("Mamãe", "Papai"...). NÃO entra no
+    // perfil sincronizado: é por aparelho, e viaja junto do cronômetro em
+    // andamento para o outro celular saber quem começou a mamada/soneca.
+    device: { name: '' },
+    activeFeed: null,   // { startAt, side, segments: [{side, min}], by }
+    activeSleep: null,  // { startAt, by }
+    activeBurp: null,   // { startAt, by } — cronômetro de arroto
   };
 }
 
@@ -72,6 +76,7 @@ function migrar(dados) {
   s.settings.wa = { ...base.settings.wa, ...((dados.settings || {}).wa || {}) };
   s.settings.ntfy = { ...base.settings.ntfy, ...((dados.settings || {}).ntfy || {}) };
   s.settings.reminders = { ...base.settings.reminders, ...((dados.settings || {}).reminders || {}) };
+  s.device = { ...base.device, ...(dados.device || {}) };
   s.meds = Array.isArray(dados.meds) ? dados.meds : base.meds;
   s.events = Array.isArray(dados.events) ? dados.events : [];
   // Normaliza alertas antigos: categoria, recorrência e data/hora âncora.
@@ -174,8 +179,18 @@ export function nextSide() {
   return ultima.lastSide === 'E' ? 'D' : 'E';
 }
 
+/** Apelido deste aparelho, para marcar quem começou o cronômetro. */
+export function deviceName() {
+  return String(state.device?.name || '').trim();
+}
+
+export function setDeviceName(nome) {
+  state.device = { ...(state.device || {}), name: String(nome || '').trim().slice(0, 24) };
+  save();
+}
+
 export function startFeed(side) {
-  state.activeFeed = { startAt: Date.now(), side, segments: [], segStart: Date.now() };
+  state.activeFeed = { startAt: Date.now(), side, segments: [], segStart: Date.now(), by: deviceName() };
   save();
 }
 
@@ -221,7 +236,7 @@ export function toggleSleep() {
     state.activeSleep = null;
     return addEvent({ type: 'sleep', at: inicio, endAt: Date.now() });
   }
-  state.activeSleep = { startAt: Date.now() };
+  state.activeSleep = { startAt: Date.now(), by: deviceName() };
   save();
   return null;
 }
@@ -234,7 +249,7 @@ export function cancelSleep() {
 /* ------------------------------------------------------------------ arroto */
 export function startBurp() {
   if (state.activeBurp) return;
-  state.activeBurp = { startAt: Date.now() };
+  state.activeBurp = { startAt: Date.now(), by: deviceName() };
   save();
 }
 
@@ -288,16 +303,20 @@ export function ongoingEvents(agora = Date.now()) {
     lista.push({
       id: ONGOING_ID.feed, type: 'feed', ongoing: 'feed', at: f.startAt, endAt: null,
       durationMin: Math.round(Math.max(0, agora - f.startAt) / MS_MIN),
-      sides: ladosAtivos(f, agora), lastSide: f.side,
+      sides: ladosAtivos(f, agora), lastSide: f.side, by: f.by || '',
     });
   }
   if (state.activeSleep) {
-    lista.push({ id: ONGOING_ID.sleep, type: 'sleep', ongoing: 'sleep', at: state.activeSleep.startAt, endAt: null });
+    lista.push({
+      id: ONGOING_ID.sleep, type: 'sleep', ongoing: 'sleep', at: state.activeSleep.startAt, endAt: null,
+      by: state.activeSleep.by || '',
+    });
   }
   if (state.activeBurp) {
     lista.push({
       id: ONGOING_ID.burp, type: 'burp', ongoing: 'burp', at: state.activeBurp.startAt, endAt: null,
       durationMin: Math.round(Math.max(0, agora - state.activeBurp.startAt) / MS_MIN),
+      by: state.activeBurp.by || '',
     });
   }
   return lista.sort((a, b) => a.at - b.at);
@@ -328,6 +347,44 @@ export function setOngoingStart(tipo, at) {
   }
   save();
   return inicio;
+}
+
+/* ------------------------------------------------------------------ em andamento: sincronização
+ * Os cronômetros são estado compartilhado do casal, não registro do aparelho:
+ * quem começa a soneca no celular dele tem que aparecer no celular dela na
+ * mesma hora. Estas três funções são a ponte com assets/js/sync.js — o campo
+ * do estado que guarda cada cronômetro fica escondido aqui dentro.
+ */
+
+/** Tipos de cronômetro que sincronizam (mesma lista do lib/sync-core). */
+export const ACTIVE_KINDS = ['feed', 'sleep', 'burp'];
+
+const CAMPO_ATIVO = { feed: 'activeFeed', sleep: 'activeSleep', burp: 'activeBurp' };
+
+/** O cronômetro de um tipo (ou null se não tem nenhum rodando). */
+export function activeTimer(tipo) {
+  return state[CAMPO_ATIVO[tipo]] || null;
+}
+
+/** Os três cronômetros, do jeito que viajam na sincronização. */
+export function activeTimers() {
+  return Object.fromEntries(ACTIVE_KINDS.map((k) => [k, activeTimer(k)]));
+}
+
+/**
+ * Aplica o cronômetro que veio do outro celular (sem marcar nada como local).
+ * `dados` null = o outro aparelho encerrou/cancelou, então some daqui também.
+ * Devolve true se mudou alguma coisa — a UI usa isso para avisar quem está
+ * olhando ("Ana iniciou uma soneca").
+ */
+export function applyRemoteActive(tipo, dados) {
+  const campo = CAMPO_ATIVO[tipo];
+  if (!campo) return false;
+  const antes = JSON.stringify(state[campo] ?? null);
+  const depois = JSON.stringify(dados ?? null);
+  if (antes === depois) return false;
+  state[campo] = dados && typeof dados === 'object' ? dados : null;
+  return true;
 }
 
 /** Descarta um cronômetro em andamento sem registrar nada. */

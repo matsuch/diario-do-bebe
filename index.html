@@ -127,6 +127,11 @@
           <button class="btn btn-ghost" id="syncGen" type="button">Gerar código</button>
           <button class="btn btn-ghost" id="syncNow" type="button">Sincronizar agora</button>
         </div>
+        <label class="field">
+          <span>Quem usa este aparelho <em class="muted small">— aparece no celular do outro quando você inicia uma mamada ou soneca</em></span>
+          <input type="text" id="syncDevice" placeholder="Mamãe" autocomplete="off" maxlength="24">
+        </label>
+        <p class="muted small">Mamada, soneca e arroto <strong>em andamento</strong> aparecem nos dois celulares enquanto acontecem: quem começa uma soneca aqui faz ela surgir lá, e quem encerra apaga dos dois.</p>
         <p class="muted small" id="syncStatus">—</p>
         <p class="disclaimer">Precisa do app publicado na Vercel com o banco (Neon) configurado — veja o README. Quem tiver o código acessa os dados, então use um código difícil de adivinhar e não o compartilhe fora do casal. Sem sincronização, o app continua funcionando só neste aparelho.</p>
       </div>

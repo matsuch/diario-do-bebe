@@ -55,6 +55,10 @@ const db = {
       limit 2000`;
     return r.map((row) => row.data);
   },
+  async getActive(key) {
+    const r = await sql`select kind, data from active_timers where family_key = ${key}`;
+    return Object.fromEntries(r.map((row) => [row.kind, row.data]));
+  },
   async markSent(key, pushKey) {
     const r = await sql`
       insert into sent_pushes (family_key, key) values (${key}, ${pushKey})

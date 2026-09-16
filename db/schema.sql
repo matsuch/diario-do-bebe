@@ -18,6 +18,20 @@ create table if not exists events (
 
 create index if not exists events_family_updated on events (family_key, updated_at);
 
+-- Cronômetros EM ANDAMENTO (mamada, sono, arroto): uma linha por tipo, para o
+-- que está acontecendo agora aparecer no celular do parceiro antes de virar
+-- evento. `data` nulo = ninguém rodando aquele cronômetro. Última-edição-vence
+-- por tipo, então iniciar uma soneca num aparelho não atropela a mamada do outro.
+create table if not exists active_timers (
+  family_key text not null,
+  kind       text not null,              -- feed | sleep | burp
+  data       jsonb,                      -- { startAt, by, ... } ou null (parado)
+  updated_at timestamptz not null default now(),
+  primary key (family_key, kind)
+);
+
+create index if not exists active_family_updated on active_timers (family_key, updated_at);
+
 -- Dedup dos avisos automáticos: garante que cada lembrete (mamada/remédio/troca)
 -- vá pro ntfy uma vez só, mesmo com o /api/cron rodando a cada poucos minutos.
 -- Criada pela função /api/cron. `key` identifica o lembrete (ex.: feed:<epoch>).

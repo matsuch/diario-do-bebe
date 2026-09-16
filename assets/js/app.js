@@ -49,6 +49,22 @@ function vibrar(ms = 12) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
 
+/**
+ * "por Ana" — só quando o cronômetro foi começado no OUTRO celular. No aparelho
+ * de quem começou não faz sentido (a pessoa sabe que foi ela), e sem apelido
+ * configurado a gente não inventa nome.
+ */
+function autorAndamento(v) {
+  const nome = String(v?.by || '').trim();
+  if (!nome || nome === S.deviceName()) return '';
+  return `por ${nome}`;
+}
+
+/** Junta pedaços de subtítulo pulando os vazios. */
+function juntar(...partes) {
+  return partes.filter(Boolean).join(' · ');
+}
+
 function openSheet(titulo, conteudo) {
   $('#sheetTitle').textContent = titulo;
   const body = $('#sheetBody');
@@ -111,7 +127,7 @@ function cardArroto() {
 
   const card = el('div', 'card timer-card');
   if (atingiu) card.classList.add('is-done');
-  card.append(el('p', 'muted', `Arroto · começou ${fmtTime(b.startAt)} · meta ${BURP_TARGET_MIN} min`));
+  card.append(el('p', 'muted', juntar(`Arroto · começou ${fmtTime(b.startAt)}`, `meta ${BURP_TARGET_MIN} min`, autorAndamento(b))));
   card.append(el('div', 'timer', `${pad(min)}:${pad(seg)}`));
   card.append(el('p', atingiu ? 'burp-meta is-done' : 'burp-meta',
     atingiu ? '✅ Meta de 20 min atingida' : `Faltam ${fmtMin(BURP_TARGET_MIN - min)}`));
@@ -143,7 +159,7 @@ function fmtHM(ms) {
 function cardSonoAtivo() {
   const s = state.activeSleep;
   const card = el('div', 'card timer-card sono-card');
-  card.append(el('p', 'muted', `😴 Dormindo desde ${fmtTime(s.startAt)}`));
+  card.append(el('p', 'muted', juntar(`😴 Dormindo desde ${fmtTime(s.startAt)}`, autorAndamento(s))));
   card.append(el('div', 'timer', fmtHM(Date.now() - s.startAt)));
   const btn = el('button', 'btn btn-primary block', 'Acordou');
   btn.addEventListener('click', () => {
@@ -584,7 +600,8 @@ function renderAgora() {
   if (state.activeFeed) {
     cards.append(cartaoProximo({
       emoji: '🍼', titulo: 'Mamando agora',
-      sub: `Lado ${SIDE_LABEL[state.activeFeed.side]} · desde ${fmtTime(state.activeFeed.startAt)}`,
+      sub: juntar(`Lado ${SIDE_LABEL[state.activeFeed.side]}`, `desde ${fmtTime(state.activeFeed.startAt)}`,
+        autorAndamento(state.activeFeed)),
       at: Date.now(), onClick: () => irPara('mamada'),
     }));
   }
@@ -673,9 +690,10 @@ function subtituloEvento(ev) {
   // Em andamento: o subtítulo é o cronômetro rodando (o tick redesenha a lista).
   if (ev.ongoing) {
     const decorrido = fmtGap(Date.now() - ev.at);
-    if (ev.type === 'feed') return `${decorrido} · lado ${SIDE_LABEL[ev.lastSide] || '—'}`;
-    if (ev.type === 'burp') return `${decorrido} no colo · meta ${BURP_TARGET_MIN}min`;
-    return `dormindo há ${decorrido}`;
+    const quem = autorAndamento(ev);
+    if (ev.type === 'feed') return juntar(decorrido, `lado ${SIDE_LABEL[ev.lastSide] || '—'}`, quem);
+    if (ev.type === 'burp') return juntar(decorrido, `no colo · meta ${BURP_TARGET_MIN}min`, quem);
+    return juntar(`dormindo há ${decorrido}`, quem);
   }
   switch (ev.type) {
     case 'feed': return describeFeed(ev);
@@ -1596,6 +1614,7 @@ function renderAjustes() {
   $('#syncEnabled').checked = SYNC.isEnabled();
   $('#syncFields').hidden = !SYNC.isEnabled();
   setVal('#syncCode', SYNC.getCode());
+  setVal('#syncDevice', S.deviceName());
   renderSyncStatus();
 
   const wa = state.settings.wa;
@@ -1792,8 +1811,31 @@ function tick() {
 
 /* ================================================================ sincronização (UI) */
 
+/** O que dizer quando um cronômetro começa/encerra no OUTRO celular. */
+const AVISO_REMOTO = {
+  feed: { inicio: '🍼 Mamada iniciada', fim: '🍼 Mamada encerrada' },
+  sleep: { inicio: '😴 Soneca iniciada', fim: '🌞 Bebê acordou' },
+  burp: { inicio: '💨 Arroto iniciado', fim: '💨 Arroto encerrado' },
+};
+
 function ligarEventosSync() {
   SYNC.onStatus(() => { if (viewAtual === 'ajustes') renderSyncStatus(); });
+
+  // Quem está no outro celular precisa SABER que a soneca começou, não só ver
+  // o card mudar sozinho na próxima vez que olhar.
+  SYNC.onRemoteActive((mudancas) => {
+    const frases = mudancas.map(({ kind, data, by }) => {
+      const texto = AVISO_REMOTO[kind];
+      if (!texto) return null;
+      const quem = by ? `por ${by}` : 'no outro celular';
+      return `${data ? texto.inicio : texto.fim} ${quem}`;
+    }).filter(Boolean);
+    if (!frases.length) return;
+    vibrar([60, 40, 60]);
+    toast(frases.join(' · '));
+  });
+
+  $('#syncDevice').addEventListener('input', (e) => { S.setDeviceName(e.target.value); });
 
   $('#syncEnabled').addEventListener('change', async (e) => {
     if (e.target.checked) {

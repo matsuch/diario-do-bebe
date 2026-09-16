@@ -93,6 +93,15 @@ sincroniza por um **código de família** através de uma função serverless na
 eventos sincronizam um a um (nada se sobrescreve quando os dois registram juntos); o
 perfil (nome, remédios, ajustes) sincroniza por última-edição-vence.
 
+**O que está em andamento também aparece nos dois.** Mamada, soneca e arroto viram
+registro só quando encerram — mas o cronômetro rodando é sincronizado à parte, um por
+tipo: quem inicia a soneca no celular dele faz ela surgir no dela na mesma hora (com
+*por Fulano*, se o aparelho tiver apelido em **Ajustes → Quem usa este aparelho**), e
+quem encerra apaga dos dois. Enquanto algum cronômetro está rodando o app pergunta ao
+servidor a cada 4s em vez de 12s (e a cada 30s em segundo plano, para poupar bateria).
+O robô dos avisos também respeita isso: ninguém recebe "hora da mamada" enquanto o
+outro já está amamentando.
+
 > Sincronização é **opcional**. Sem ela, o app segue funcionando local e offline. Ela
 > só funciona quando publicado na Vercel (o GitHub Pages não roda backend).
 
@@ -113,7 +122,9 @@ em `POST /api/sync`.
 
 **3) No app** (nos dois celulares): **Ajustes → Sincronizar entre celulares** → ligue,
 use **o mesmo código** nos dois (gere um no primeiro e copie para o segundo) →
-*Sincronizar agora*. Pronto.
+*Sincronizar agora*. Pronto. Vale preencher *Quem usa este aparelho* ("Mamãe",
+"Papai") em cada celular: é o nome que o outro vê quando você inicia uma mamada ou
+soneca. Ele fica só no aparelho — não vai para o perfil da família.
 
 > ⚠️ Quem tiver o código acessa os dados da família — use um código difícil de
 > adivinhar e não o compartilhe fora do casal.

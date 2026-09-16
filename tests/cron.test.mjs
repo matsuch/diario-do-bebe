@@ -23,7 +23,7 @@ const perfil = () => ({
 });
 
 /** Banco em memória para o cron. `now` é fixo (relógio do teste). */
-function fakeDb({ now, families, events = {} }) {
+function fakeDb({ now, families, events = {}, active = {} }) {
   const sent = new Set();
   const chave = (k, pk) => `${k}::${pk}`;
   return {
@@ -33,6 +33,7 @@ function fakeDb({ now, families, events = {} }) {
     async getRecentEvents(key, since) {
       return (events[key] || []).filter((e) => !e.deleted && e.at > since);
     },
+    async getActive(key) { return active[key] || {}; },
     async markSent(key, pk) { const id = chave(key, pk); if (sent.has(id)) return false; sent.add(id); return true; },
     async unmarkSent(key, pk) { sent.delete(chave(key, pk)); },
     async pruneSent() { /* no-op no teste */ },
@@ -56,6 +57,31 @@ await teste('envia a mamada vencida uma vez', async () => {
   assert.match(cap.enviados[0].opts.message, /mamada/i);
   assert.equal(cap.enviados[0].opts.title, 'Rotina · Teresa');
   assert.equal(cap.enviados[0].cfg.topic, 'segredo', 'usa o tópico do perfil');
+});
+
+await teste('mamada em andamento no celular do parceiro silencia o aviso', async () => {
+  const now = 10 * MS_HOUR;
+  const db = fakeDb({
+    now,
+    families: [{ key: FAM, profile: perfil() }],
+    events: feedVencida(now),
+    active: { [FAM]: { feed: { startAt: now - 5 * MS_MIN, by: 'Mamãe' } } },
+  });
+  const cap = capturador();
+  const r = await runCron(db, cap);
+  assert.equal(r.enviados, 0, 'já estão amamentando: o push só atrapalharia');
+});
+
+await teste('soneca em andamento não silencia o aviso de mamada', async () => {
+  const now = 10 * MS_HOUR;
+  const db = fakeDb({
+    now,
+    families: [{ key: FAM, profile: perfil() }],
+    events: feedVencida(now),
+    active: { [FAM]: { sleep: { startAt: now - 30 * MS_MIN } } },
+  });
+  const cap = capturador();
+  assert.equal((await runCron(db, cap)).enviados, 1);
 });
 
 await teste('não reenvia no tick seguinte (dedup)', async () => {
