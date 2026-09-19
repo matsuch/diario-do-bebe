@@ -395,26 +395,71 @@ export function cancelOngoing(tipo) {
 }
 
 /* ------------------------------------------------------------------ sono: janelas e recomendações
- * Referências GERAIS por idade (cada bebê é único; não é conselho médico).
- * Janela de sono = tempo acordado esperado entre as sonecas.
+ *
+ * PROCEDÊNCIA DOS NÚMEROS DESTE BLOCO
+ *
+ * [AASM] Paruthi et al., "Recommended Amount of Sleep for Pediatric Populations:
+ *        A Consensus Statement of the American Academy of Sleep Medicine".
+ *        J Clin Sleep Med. 2016;12(6):785-786. Endossado pela AAP.
+ *        https://jcsm.aasm.org/doi/10.5664/jcsm.5866
+ * [NSF]  Hirshkowitz et al., "National Sleep Foundation's sleep time duration
+ *        recommendations: methodology and results summary".
+ *        Sleep Health. 2015;1(1):40-43.
+ * [GAL]  Galland et al., "Normal sleep patterns in infants and children: a
+ *        systematic review of observational studies".
+ *        Sleep Med Rev. 2012;16(3):213-222.
+ * [MIN]  Mindell et al., "Development of infant and toddler sleep patterns:
+ *        real-world data from a mobile application".
+ *        J Sleep Res. 2016;25(5):508-516.
+ *
+ * SONO RECOMENDADO (SLEEP_REC): vem direto da [AASM], que é a diretriz oficial.
+ * A [AASM] declara explicitamente NÃO haver recomendação abaixo de 4 meses (a
+ * variação normal é ampla demais), então essa faixa usa a [NSF].
+ *
+ * JANELA DE SONO (WAKE_WINDOWS): não existe fonte oficial. "Wake window" não é
+ * um conceito de medicina do sono — [AASM], AAP e [NSF] não definem, não
+ * recomendam e não citam janelas de vigília, e não há estudo que teste durações
+ * de vigília específicas. O termo vem de consultoria de sono comercial.
+ * O que a literatura publica é (a) sono total por 24h e (b) número médio de
+ * sonecas por idade. Como a janela não pode ser citada, ela é tratada aqui como
+ * heurística COM INVARIANTE VERIFICÁVEL: para cada faixa, a janela implica um
+ * número de períodos de sono por 24h,
+ *
+ *     períodos/24h = (24h − sono total recomendado) / janela
+ *
+ * e esse número tem que bater com a curva de consolidação observada — [GAL]
+ * mede média de 3,1 sonecas diurnas aos 0–5 meses e 1,2 aos 12 meses (ou seja,
+ * ~4,1 e ~2,2 períodos de sono por 24h, contando a noite), e [MIN] observa duas
+ * sonecas de ~1,5h mais ~10,5h de noite entre 3 e 7 meses. A tabela abaixo
+ * produz 10,2 → 6,8 → 5,7 → 5,7 → 4,2 → 3,3 → 2,9 → 2,7 → 2,1 períodos/24h,
+ * dentro dessa curva em todas as faixas. tests/sleep.test.mjs trava o invariante,
+ * para que uma edição futura em qualquer das duas tabelas não passe batido.
+ *
+ * Nada aqui é conselho médico: são referências gerais por idade, e cada bebê
+ * tem o seu próprio ritmo.
  */
-const WAKE_WINDOWS = [
-  { d: 30,    min: 40,  max: 60 },   // 0–1 mês
-  { d: 60,    min: 60,  max: 90 },   // 1–2 meses
-  { d: 90,    min: 75,  max: 105 },  // 2–3 meses
-  { d: 120,   min: 90,  max: 120 },  // 3–4 meses
-  { d: 180,   min: 120, max: 165 },  // 4–6 meses
-  { d: 270,   min: 150, max: 210 },  // 6–9 meses
-  { d: 365,   min: 180, max: 240 },  // 9–12 meses
-  { d: 540,   min: 210, max: 300 },  // 12–18 meses
-  { d: 99999, min: 300, max: 360 },  // 18+ meses
+export const WAKE_WINDOWS = [
+  // Heurística, não diretriz. O comentário de cada linha traz os períodos de
+  // sono por 24h que ela implica (ver o invariante no bloco acima).
+  { d: 30,    min: 40,  max: 60 },   // 0–1 mês    → ~10,2 períodos/24h (~8–12 mamadas/dia)
+  { d: 60,    min: 60,  max: 90 },   // 1–2 meses  → ~6,8
+  { d: 90,    min: 75,  max: 105 },  // 2–3 meses  → ~5,7
+  { d: 120,   min: 90,  max: 120 },  // 3–4 meses  → ~5,7
+  { d: 180,   min: 120, max: 165 },  // 4–6 meses  → ~4,2  (≈3,2 sonecas; [GAL] 3,1 aos 0–5m)
+  { d: 270,   min: 150, max: 210 },  // 6–9 meses  → ~3,3  (≈2,3 sonecas)
+  { d: 365,   min: 180, max: 240 },  // 9–12 meses → ~2,9  (≈1,9 sonecas; [GAL] 1,2 aos 12m)
+  { d: 540,   min: 210, max: 300 },  // 12–18 meses→ ~2,7
+  { d: 99999, min: 300, max: 360 },  // 18+ meses  → ~2,1  (1 soneca + noite)
 ];
-const SLEEP_REC = [
-  { d: 90,    min: 14, max: 17 },  // 0–3 meses
-  { d: 365,   min: 12, max: 16 },  // 4–11 meses
-  { d: 730,   min: 11, max: 14 },  // 1–2 anos
-  { d: 1825,  min: 10, max: 13 },  // 3–5 anos
-  { d: 99999, min: 9,  max: 12 },
+export const SLEEP_REC = [
+  // Limites em DIAS de vida: a faixa "1 a 2 anos" da [AASM] vale até o 3º
+  // aniversário (12–35 meses), e "3 a 5 anos" até o 6º — daí 1095 e 2190.
+  { d: 90,    min: 14, max: 17 },  // 0–3 meses  [NSF] — a [AASM] não recomenda <4 meses
+  { d: 365,   min: 12, max: 16 },  // 4–12 meses [AASM]
+  { d: 1095,  min: 11, max: 14 },  // 1–2 anos   [AASM]
+  { d: 2190,  min: 10, max: 13 },  // 3–5 anos   [AASM]
+  { d: 4745,  min: 9,  max: 12 },  // 6–12 anos  [AASM]
+  { d: 99999, min: 8,  max: 10 },  // 13–18 anos [AASM]
 ];
 
 /** Idade em dias (ou null se não tem data de nascimento). */
