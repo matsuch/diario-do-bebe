@@ -1457,7 +1457,7 @@ function topoGuia(emoji, tint, titulo, sub) {
 }
 
 /** Sem data de nascimento não existe fase — peça o dado em vez de sumir. */
-function guiaSemData(container) {
+function guiaSemData() {
   const card = el('div', 'card guia-vazio');
   card.append(el('b', null, 'Um guia do que está acontecendo com o seu bebê'));
   card.append(el('p', 'muted small',
@@ -1467,13 +1467,13 @@ function guiaSemData(container) {
   btn.type = 'button';
   btn.addEventListener('click', () => irPara('ajustes'));
   card.append(btn);
-  container.append(card);
+  return [card];
 }
 
 /** "Hoje seu bebê está com X" — ou o aviso de que você está espiando outra fase. */
-function cardIdade(container, dias, fase, faseHoje) {
+function cardIdade(dias, fase, faseHoje) {
   const espiando = fase.id !== faseHoje.id;
-  const card = el('div', `guia-hero${espiando ? ' is-preview' : ''}`);
+  const card = el('div', `card guia-hero${espiando ? ' is-preview' : ''}`);
 
   if (espiando) {
     const futura = GUIA.indiceDaFase(fase.id) > GUIA.indiceDaFase(faseHoje.id);
@@ -1505,11 +1505,11 @@ function cardIdade(container, dias, fase, faseHoje) {
     voltar.addEventListener('click', () => { faseEspiada = null; guiaDesenhado = ''; renderGuia(); });
     card.append(voltar);
   }
-  container.append(card);
+  return card;
 }
 
 /** Régua de fases: progressão temporal, rolável, com a fase atual destacada. */
-function cardRegua(container, fase, faseHoje) {
+function cardRegua(fase, faseHoje) {
   const regua = el('div', 'guia-regua');
   GUIA.FASES.forEach((f) => {
     const chip = el('button', 'guia-chip', null);
@@ -1525,15 +1525,21 @@ function cardRegua(container, fase, faseHoje) {
     });
     regua.append(chip);
   });
-  container.append(regua);
-  // Centraliza a fase aberta sem mexer na rolagem da página (por isso não é
-  // scrollIntoView: ele arrastaria a tela inteira no celular).
+  return regua;
+}
+
+/**
+ * Centraliza a fase aberta na régua. Só depois de estar no documento: fora
+ * dele clientWidth é 0 e a conta daria sempre o começo da lista. Não usa
+ * scrollIntoView de propósito — ele arrastaria a tela inteira no celular.
+ */
+function centralizarRegua(regua) {
   const ativo = regua.querySelector('.is-on');
   if (ativo) regua.scrollLeft = ativo.offsetLeft - (regua.clientWidth - ativo.offsetWidth) / 2;
 }
 
 /** Card do salto de desenvolvimento, quando a idade cai numa das janelas. */
-function cardSalto(container, salto) {
+function cardSalto(salto) {
   const card = el('div', 'card guia-salto');
   card.append(topoGuia('✨', 'tint-sleep', `Período de salto · ${salto.semanas}`, salto.titulo));
   card.append(el('p', 'guia-nota',
@@ -1544,12 +1550,11 @@ function cardSalto(container, salto) {
   card.append(listaGuia(salto.perceber));
   card.append(el('b', 'guia-sub', 'O que pode estar acontecendo'));
   card.append(el('p', 'guia-p', salto.amadurecendo));
-  container.append(card);
+  return card;
 }
 
 /** "O que seu bebê pode estar sentindo": cards curtos, linguagem de cuidado. */
-function cardsSentindo(container, fase) {
-  container.append(el('h2', 'section-title', 'O que seu bebê pode estar sentindo'));
+function cardsSentindo(fase) {
   const grade = el('div', 'guia-sent-grid');
   fase.sentindo.forEach((s) => {
     const c = el('div', 'card guia-sent');
@@ -1557,12 +1562,11 @@ function cardsSentindo(container, fase) {
     c.append(el('p', 'guia-p', s.texto));
     grade.append(c);
   });
-  container.append(grade);
+  return [el('h2', 'section-title', 'O que seu bebê pode estar sentindo'), grade];
 }
 
 /** Categorias em sanfona: a primeira já aberta, as outras com uma prévia. */
-function cardsCategorias(container, fase) {
-  container.append(el('h2', 'section-title', 'Nesta fase, por área'));
+function cardsCategorias(fase) {
   const stack = el('div', 'stack');
   GUIA.CATEGORIAS.forEach((cat, i) => {
     const itens = fase.blocos[cat.id] || [];
@@ -1579,20 +1583,20 @@ function cardsCategorias(container, fase) {
     acc.append(sum, listaGuia(itens));
     stack.append(acc);
   });
-  container.append(stack);
+  return [el('h2', 'section-title', 'Nesta fase, por área'), stack];
 }
 
 /** "O que você pode fazer" — sugestões da idade, nunca prescrição. */
-function cardFazer(container, fase) {
+function cardFazer(fase) {
   const card = el('div', 'card guia-fazer');
   card.append(topoGuia('🤲', 'tint-lamp', 'Você pode ajudar assim', 'Ideias simples para esta fase'));
   card.append(listaGuia(fase.fazer, 'is-check'));
   card.append(el('p', 'muted small', 'São sugestões gerais para a idade e não substituem a orientação do pediatra.'));
-  container.append(card);
+  return card;
 }
 
 /** "Quando procurar orientação" — separa "pode ser normal" de "converse com o pediatra". */
-function cardAtencao(container, fase, dias) {
+function cardAtencao(fase, dias) {
   const card = el('div', 'card guia-alerta');
   card.append(topoGuia('🩺', 'tint-med', 'Quando procurar orientação',
     'Esta aba não diagnostica nada — ela ajuda a saber a hora de perguntar.'));
@@ -1606,11 +1610,11 @@ function cardAtencao(container, fase, dias) {
     card.append(el('b', 'guia-sub is-urgente', urgente.titulo));
     card.append(listaGuia(urgente.itens, 'is-urgente'));
   }
-  container.append(card);
+  return card;
 }
 
 /** Rodapé: em que fontes cada coisa foi baseada. */
-function cardFontes(container, fase) {
+function cardFontes(fase) {
   const det = el('details', 'guia-fontes');
   const sum = document.createElement('summary');
   sum.textContent = 'De onde vem esta informação';
@@ -1631,47 +1635,58 @@ function cardFontes(container, fase) {
   det.append(el('p', 'muted small',
     'Os textos são escritos por nós a partir dessas fontes, nunca copiados delas. Referências de '
     + 'aplicativos como BabyCenter e The Wonder Weeks serviram só para pensar o formato da tela.'));
-  container.append(det);
+  return det;
 }
 
-/** Monta (ou reaproveita) o guia da fase na aba Evolução. */
+/**
+ * Monta (ou reaproveita) o guia da fase na aba Evolução.
+ *
+ * Os blocos entram como FILHOS DIRETOS da tela, antes da âncora "Crescimento",
+ * e não dentro de uma div de embrulho: o ritmo vertical do app
+ * (`#main .view > * + *`) só alcança filho direto, então com wrapper os cards
+ * e os títulos de seção ficariam colados uns nos outros. Cada nó do guia leva
+ * `data-guia` para o próximo render saber o que é dele e o que é da tela.
+ */
 function renderGuia() {
-  const cabeca = $('#guiaIdade');
-  const regua = $('#guiaRegua');
-  const corpo = $('#guiaConteudo');
+  const view = $('#view-evolucao');
+  const ancora = $('#guiaAncora');
   const dias = idadeGuia();
-
-  if (dias == null) {
-    if (guiaDesenhado === 'sem-data') return;
-    guiaDesenhado = 'sem-data';
-    cabeca.innerHTML = ''; regua.innerHTML = ''; corpo.innerHTML = '';
-    guiaSemData(cabeca);
-    return;
-  }
-
-  const faseHoje = GUIA.faseParaIdade(dias);
+  const faseHoje = dias == null ? null : GUIA.faseParaIdade(dias);
   const fase = (faseEspiada && GUIA.FASES.find((f) => f.id === faseEspiada)) || faseHoje;
-  if (!fase) return;
 
-  // Redesenhar a cada mamada registrada apagaria as sanfonas que o pai abriu.
-  const chave = `${fase.id}|${faseHoje.id}|${dias}`;
+  // Redesenhar a cada mamada registrada fecharia as sanfonas que o pai abriu.
+  const chave = fase ? `${fase.id}|${faseHoje.id}|${dias}` : 'sem-data';
   if (guiaDesenhado === chave) return;
   guiaDesenhado = chave;
 
-  cabeca.innerHTML = ''; regua.innerHTML = ''; corpo.innerHTML = '';
-  cardIdade(cabeca, dias, fase, faseHoje);
-  cardRegua(regua, fase, faseHoje);
+  view.querySelectorAll('[data-guia]').forEach((n) => n.remove());
 
-  // Espiando outra fase, o salto mostrado é o daquela fase, não o de hoje.
-  const refSalto = fase.id === faseHoje.id ? dias : Math.min(fase.de + 3, fase.ate);
-  const salto = GUIA.saltoParaIdade(refSalto);
-  if (salto) cardSalto(corpo, salto);
+  const blocos = [];
+  let regua = null;
+  if (!fase) {
+    blocos.push(...guiaSemData());
+  } else {
+    blocos.push(cardIdade(dias, fase, faseHoje));
+    regua = cardRegua(fase, faseHoje);
+    blocos.push(regua);
 
-  cardsSentindo(corpo, fase);
-  cardsCategorias(corpo, fase);
-  cardFazer(corpo, fase);
-  cardAtencao(corpo, fase, fase.id === faseHoje.id ? dias : fase.de);
-  cardFontes(corpo, fase);
+    // Espiando outra fase, o salto mostrado é o daquela fase, não o de hoje.
+    const refSalto = fase.id === faseHoje.id ? dias : Math.min(fase.de + 3, fase.ate);
+    const salto = GUIA.saltoParaIdade(refSalto);
+    if (salto) blocos.push(cardSalto(salto));
+
+    blocos.push(...cardsSentindo(fase));
+    blocos.push(...cardsCategorias(fase));
+    blocos.push(cardFazer(fase));
+    blocos.push(cardAtencao(fase, fase.id === faseHoje.id ? dias : fase.de));
+    blocos.push(cardFontes(fase));
+  }
+
+  blocos.forEach((no) => {
+    no.dataset.guia = '';
+    view.insertBefore(no, ancora);
+  });
+  if (regua) centralizarRegua(regua);
 }
 
 /* ================================================================ EVOLUÇÃO */

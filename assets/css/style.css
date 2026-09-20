@@ -342,14 +342,17 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* ---------- evolução: guia da fase ----------
  * Hierarquia da tela: a idade é o maior elemento (é a primeira pergunta que os
  * pais fazem), depois a régua de fases, depois o conteúdo em cards pequenos.
- * Nada de parágrafo corrido longo: tudo cabe numa olhada de semáforo. */
+ * Nada de parágrafo corrido longo: tudo cabe numa olhada de semáforo.
+ *
+ * Espaçamento: nenhum bloco do guia carrega margem própria. Eles entram como
+ * filhos diretos da tela e herdam o mesmo ritmo das outras abas. Aqui só mora
+ * o espaçamento DE DENTRO dos cards, e mesmo esse sai dos tokens. */
 
+/* o herói é o .card do app com outro fundo — não um card paralelo */
 .guia-hero {
   background:
     radial-gradient(120% 130% at 12% -10%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 62%),
     var(--surface);
-  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
-  padding: 20px 18px 18px;
 }
 .guia-hero.is-preview {
   background:
@@ -364,21 +367,23 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 }
 .guia-dias { display: block; color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 4px; }
 .guia-titulo-bloco {
-  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft);
+  margin-top: var(--sp-block); padding-top: var(--sp-tight);
+  border-top: 1px solid var(--line-soft);
 }
 .guia-fase-tag {
   display: inline-block; padding: 3px 9px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
   font-size: 11px; font-weight: 800; letter-spacing: -0.01em;
 }
-.guia-titulo { font-size: 15px; margin-top: 8px; }
+.guia-titulo { font-size: 15px; margin-top: 6px; }
 .guia-resumo { margin: 6px 0 0; font-size: 14.5px; font-weight: 600; line-height: 1.5; }
-.guia-hero .btn { margin-top: 14px; }
 
 /* régua de fases: progressão temporal rolável, com a de hoje marcada */
 .guia-regua {
-  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
-  padding: 2px 2px 6px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  /* padding só para o anel de foco não ser cortado pelo overflow; qualquer
+     valor maior aqui somaria ao gap da tela e quebraria o ritmo. */
+  padding: 2px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
 }
 .guia-regua::-webkit-scrollbar { display: none; }
 .guia-chip {
@@ -389,14 +394,13 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   transition: color .15s ease, border-color .15s ease, background .15s ease;
 }
 .guia-chip.is-hoje { color: var(--text); border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+/* sem sombra no chip ativo: o overflow da régua a cortaria pela metade */
 .guia-chip.is-on {
-  background: var(--accent); color: var(--accent-ink);
-  border-color: transparent; box-shadow: 0 6px 18px -10px var(--accent);
+  background: var(--accent); color: var(--accent-ink); border-color: transparent;
 }
-.guia-chip.is-hoje.is-on { box-shadow: 0 6px 18px -10px var(--accent); }
 
 /* peças compartilhadas dos cards do guia */
-.guia-card-top { display: flex; align-items: center; gap: 12px; }
+.guia-card-top { display: flex; align-items: center; gap: var(--sp-tight); }
 .guia-card-txt { flex: 1; min-width: 0; }
 .guia-card-txt b { display: block; font-size: 15px; }
 .guia-ic {
@@ -404,14 +408,14 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   display: grid; place-items: center; font-size: 19px; line-height: 1;
   border: 1px solid var(--line-soft);
 }
-.guia-sub { display: block; margin-top: 14px; font-size: 12.5px; color: var(--muted); font-weight: 800; }
+.guia-sub { display: block; margin-top: var(--sp-block); font-size: 12.5px; color: var(--muted); font-weight: 800; }
 .guia-sub.is-urgente { color: var(--danger); }
 .guia-p { margin: 6px 0 0; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--text); }
 .guia-nota {
-  margin: 12px 0 0; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--muted);
-  border-left: 2px solid var(--line); padding-left: 10px;
+  margin: var(--sp-tight) 0 0; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--muted);
+  border-left: 2px solid var(--line); padding-left: var(--sp-tight);
 }
-.guia-lista { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.guia-lista { margin: var(--sp-tight) 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .guia-lista li {
   position: relative; padding-left: 16px; font-size: 14px; font-weight: 600; line-height: 1.45;
 }
@@ -433,10 +437,10 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* categorias em sanfona: fechada mostra uma prévia de uma linha */
 .guia-acc {
   background: var(--surface); border: 1px solid var(--line-soft);
-  border-radius: var(--r-md); padding: 12px 14px;
+  border-radius: var(--r-md); padding: 12px 14px; /* mesmo padding de .next */
 }
 .guia-acc > summary {
-  display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: var(--sp-tight); cursor: pointer; list-style: none;
 }
 .guia-acc > summary::-webkit-details-marker { display: none; }
 .guia-prev {
@@ -454,9 +458,9 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* "quando procurar orientação": borda de atenção sem virar alarme */
 .guia-alerta { border-color: color-mix(in oklab, var(--accent) 26%, var(--line-soft)); }
 .guia-ok {
-  margin: 12px 0 0; font-size: 13px; font-weight: 600; line-height: 1.5;
+  margin: var(--sp-tight) 0 0; font-size: 13px; font-weight: 600; line-height: 1.5;
   color: var(--diaper); background: var(--diaper-soft);
-  border-radius: var(--r-sm); padding: 9px 11px;
+  border-radius: var(--r-sm); padding: var(--sp-tight);
 }
 
 .guia-fontes {
