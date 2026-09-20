@@ -231,6 +231,26 @@ try {
     '4,35kg e 55,2cm aos 43 dias caem dentro da faixa da OMS e deveriam vir como esperado');
   checar((await page.locator('#medidaGrid .measure-val').allTextContents()).some((t) => t.includes('4,35')),
     'card de peso não mostrou o valor registrado');
+
+  // O guia da fase tem que entrar como FILHO DIRETO da tela. Dentro de uma div
+  // de embrulho ele perderia o ritmo vertical do app (que só alcança filho
+  // direto) e os cards ficariam colados — foi assim que esta tela nasceu, e o
+  // bug não apareceu em nenhum teste até existir esta checagem.
+  checar(await page.locator('#view-evolucao > .guia-hero').count() === 1,
+    'o cartão de idade do guia não é filho direto da tela');
+  const guiaAninhado = await page.locator('#view-evolucao [data-guia]:not(#view-evolucao > [data-guia])').count();
+  checar(guiaAninhado === 0, `${guiaAninhado} bloco(s) do guia ficaram dentro de um wrapper`);
+
+  // Ritmo vertical: a tela só pode usar os três valores da escala, como as
+  // outras abas. Um quarto valor aqui significa margem própria em algum bloco.
+  const ritmoEvo = await page.evaluate(() => [...document.querySelector('#view-evolucao').children]
+    .filter((n) => getComputedStyle(n).display !== 'none')
+    .map((n) => getComputedStyle(n).marginTop));
+  const foraDaEscala = [...new Set(ritmoEvo)].filter((m) => !['10px', '16px', '26px'].includes(m));
+  checar(foraDaEscala.length === 0,
+    `Evolução usa espaçamento fora da escala do app: ${foraDaEscala.join(', ')}`);
+  checar(ritmoEvo.length > 8, `Evolução deveria ter o guia + o crescimento na tela (veio ${ritmoEvo.length})`);
+
   await shot('evolucao.png');
 
   // diário: só gráficos — sono, xixis e cocôs dos últimos 7 dias

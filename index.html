@@ -104,12 +104,12 @@
 
   <!-- ============ EVOLUÇÃO ============ -->
   <section class="view" id="view-evolucao" hidden>
-    <!-- guia por idade: "o que pode estar acontecendo com meu bebê agora" -->
-    <div id="guiaIdade"></div>
-    <div id="guiaRegua"></div>
-    <div id="guiaConteudo"></div>
-
-    <h2 class="section-title">Crescimento</h2>
+    <!-- O guia por idade ("o que pode estar acontecendo com meu bebê agora") é
+         montado em JS e inserido AQUI, antes da âncora, como filho direto da
+         tela. Sem div de embrulho de propósito: só filho direto herda o ritmo
+         vertical (--sp-tight / --sp-block / --sp-section) que vale em todas as
+         abas — dentro de um wrapper os blocos ficariam colados. -->
+    <h2 class="section-title" id="guiaAncora">Crescimento</h2>
     <div class="measure-grid" id="medidaGrid"></div>
     <button class="btn btn-ghost block" id="btnMedida" type="button">Registrar peso e altura</button>
     <div id="evolucaoRotina"></div>
