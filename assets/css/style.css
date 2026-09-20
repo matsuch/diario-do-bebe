@@ -339,6 +339,143 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 
 /* ---------- resumo do dia (tiles uniformes) ---------- */
 .today-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+/* ---------- evolução: guia da fase ----------
+ * Hierarquia da tela: a idade é o maior elemento (é a primeira pergunta que os
+ * pais fazem), depois a régua de fases, depois o conteúdo em cards pequenos.
+ * Nada de parágrafo corrido longo: tudo cabe numa olhada de semáforo. */
+
+.guia-hero {
+  background:
+    radial-gradient(120% 130% at 12% -10%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 62%),
+    var(--surface);
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  padding: 20px 18px 18px;
+}
+.guia-hero.is-preview {
+  background:
+    radial-gradient(120% 130% at 12% -10%, color-mix(in oklab, var(--sleep) 16%, transparent), transparent 62%),
+    var(--surface);
+  border-color: color-mix(in oklab, var(--sleep) 30%, var(--line-soft));
+}
+.guia-kicker { display: block; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.guia-idade {
+  display: block; font-size: 32px; line-height: 1.08; font-weight: 800;
+  letter-spacing: -0.035em; margin-top: 2px;
+}
+.guia-dias { display: block; color: var(--muted); font-size: 13px; font-weight: 600; margin-top: 4px; }
+.guia-titulo-bloco {
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft);
+}
+.guia-fase-tag {
+  display: inline-block; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+  font-size: 11px; font-weight: 800; letter-spacing: -0.01em;
+}
+.guia-titulo { font-size: 15px; margin-top: 8px; }
+.guia-resumo { margin: 6px 0 0; font-size: 14.5px; font-weight: 600; line-height: 1.5; }
+.guia-hero .btn { margin-top: 14px; }
+
+/* régua de fases: progressão temporal rolável, com a de hoje marcada */
+.guia-regua {
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  padding: 2px 2px 6px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+}
+.guia-regua::-webkit-scrollbar { display: none; }
+.guia-chip {
+  flex: none; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--line-soft); background: var(--surface);
+  color: var(--muted); border-radius: 999px; padding: 7px 13px;
+  font-size: 12px; font-weight: 800; letter-spacing: -0.01em;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.guia-chip.is-hoje { color: var(--text); border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
+.guia-chip.is-on {
+  background: var(--accent); color: var(--accent-ink);
+  border-color: transparent; box-shadow: 0 6px 18px -10px var(--accent);
+}
+.guia-chip.is-hoje.is-on { box-shadow: 0 6px 18px -10px var(--accent); }
+
+/* peças compartilhadas dos cards do guia */
+.guia-card-top { display: flex; align-items: center; gap: 12px; }
+.guia-card-txt { flex: 1; min-width: 0; }
+.guia-card-txt b { display: block; font-size: 15px; }
+.guia-ic {
+  width: 38px; height: 38px; flex: none; border-radius: 50%;
+  display: grid; place-items: center; font-size: 19px; line-height: 1;
+  border: 1px solid var(--line-soft);
+}
+.guia-sub { display: block; margin-top: 14px; font-size: 12.5px; color: var(--muted); font-weight: 800; }
+.guia-sub.is-urgente { color: var(--danger); }
+.guia-p { margin: 6px 0 0; font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--text); }
+.guia-nota {
+  margin: 12px 0 0; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--muted);
+  border-left: 2px solid var(--line); padding-left: 10px;
+}
+.guia-lista { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.guia-lista li {
+  position: relative; padding-left: 16px; font-size: 14px; font-weight: 600; line-height: 1.45;
+}
+.guia-lista li::before {
+  content: ""; position: absolute; left: 2px; top: 8px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+}
+.guia-lista.is-check li::before {
+  content: "✓"; background: none; width: auto; height: auto;
+  top: 0; left: 0; color: var(--diaper); font-size: 12px; font-weight: 800;
+}
+.guia-lista.is-urgente li::before { background: var(--danger); }
+.guia-lista a { color: var(--sleep); }
+
+/* "o que seu bebê pode estar sentindo" */
+.guia-sent-grid { display: grid; gap: var(--sp-tight); }
+.guia-sent b { font-size: 14.5px; }
+
+/* categorias em sanfona: fechada mostra uma prévia de uma linha */
+.guia-acc {
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--r-md); padding: 12px 14px;
+}
+.guia-acc > summary {
+  display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none;
+}
+.guia-acc > summary::-webkit-details-marker { display: none; }
+.guia-prev {
+  display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical;
+  overflow: hidden; color: var(--muted); font-size: 12.5px; font-weight: 600; margin-top: 1px;
+}
+.guia-seta {
+  flex: none; color: var(--muted); font-size: 20px; line-height: 1;
+  transform: rotate(90deg); transition: transform .18s ease;
+}
+.guia-acc[open] > summary .guia-prev { display: none; }
+.guia-acc[open] > summary .guia-seta { transform: rotate(-90deg); }
+.guia-acc[open] { border-color: var(--line); }
+
+/* "quando procurar orientação": borda de atenção sem virar alarme */
+.guia-alerta { border-color: color-mix(in oklab, var(--accent) 26%, var(--line-soft)); }
+.guia-ok {
+  margin: 12px 0 0; font-size: 13px; font-weight: 600; line-height: 1.5;
+  color: var(--diaper); background: var(--diaper-soft);
+  border-radius: var(--r-sm); padding: 9px 11px;
+}
+
+.guia-fontes {
+  border: 1px dashed var(--line); border-radius: var(--r-md); padding: 12px 14px;
+}
+.guia-fontes > summary {
+  cursor: pointer; color: var(--muted); font-size: 12.5px; font-weight: 700;
+}
+.guia-fontes .guia-lista li { font-size: 12.5px; font-weight: 600; }
+
+.guia-vazio b { display: block; font-size: 15px; }
+.guia-vazio p { margin: 6px 0 0; }
+
+/* telas largas (tablet/desktop): duas colunas nos cards curtos */
+@media (min-width: 560px) {
+  .guia-sent-grid { grid-template-columns: 1fr 1fr; }
+  .guia-idade { font-size: 38px; }
+}
+
 /* ---------- evolução: peso, altura e rotina vs. esperado ---------- */
 .measure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-tight); }
 .measure {
