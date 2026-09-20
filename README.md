@@ -28,8 +28,41 @@ celulares e avisos automáticos são opcionais.
 | **Sono** | Cronômetro dedicado; janela de sono por idade prevê a próxima soneca; **relógio do dia (24h)** na Início mostra sono × mamadas ao voltar para um dia anterior. O **total recomendado por 24h** segue o consenso da **AASM 2016** (endossado pela AAP), com a faixa de 0–3 meses vinda da **NSF 2015** — a AASM não recomenda abaixo de 4 meses. Já a **janela de sono não tem fonte oficial**: nenhuma diretriz define "wake window", então ela é uma heurística conferida contra o sono total recomendado e contra as médias de sonecas de **Galland 2012**. As fontes e o invariante estão no topo do bloco de sono em `assets/js/store.js`. **Referências gerais por idade — não é conselho médico.** |
 | **Remédios** | Cada remédio com seu intervalo. "Tomei agora" recalcula a próxima dose sozinho. Já vem com Cefalexina 6h, Paracetamol 8h e Profenid 12h — é só editar ou apagar. |
 | **Diário** | Só gráficos: os números de hoje e três barras dos **últimos 7 dias** — sono, xixis e cocôs — com o valor de cada dia rotulado. |
-| **Evolução** | Peso e altura no topo, com o **percentil da curva da OMS** para a idade e o sexo, e a faixa esperada. Abaixo, a média de xixis, cocôs e sono dos últimos 7 dias comparada com a referência da idade. Os gráficos do Diário ganham uma **linha tracejada de meta**. Onde não há referência honesta — a frequência de cocô depois das primeiras semanas — o app diz "sem meta" em vez de inventar uma. **Referências gerais: não é conselho médico.** |
+| **Evolução** | Um **guia personalizado da fase do bebê**, calculado pela data de nascimento: "hoje seu bebê está com 5 semanas" e, embaixo, o que costuma acontecer agora em **seis áreas** (desenvolvimento, sono, comportamento, corpo e aparência, alimentação e sentidos), **o que ele pode estar sentindo**, **o que você pode fazer** e **quando procurar orientação** — com a rede de segurança de urgência enquanto o bebê é pequeno. Nas primeiras 8 semanas o guia é **semana a semana**; depois abre em meses e faixas. Uma **régua de fases** deixa espiar o que vem antes e depois. Quando a idade cai numa janela de **salto de desenvolvimento**, entra um card explicando o que os pais podem perceber — sempre como possibilidade, nunca como calendário exato (veja abaixo). Mais abaixo continuam **peso e altura** com o **percentil da curva da OMS** para a idade e o sexo, e a média de xixis, cocôs e sono dos últimos 7 dias comparada com a referência da idade. Onde não há referência honesta — a frequência de cocô depois das primeiras semanas — o app diz "sem meta" em vez de inventar uma. **Referências gerais: não é conselho médico.** |
 | **Ajustes** | Na **engrenagem do canto superior direito**, disponível em qualquer aba: nome e nascimento do bebê, intervalo entre mamadas, avisos, **notificações no WhatsApp** e backup dos dados. |
+
+## De onde vem o conteúdo do guia de fases
+
+O texto da aba Evolução é escrito por nós, nunca copiado, e cada informação guarda
+**internamente a fonte em que foi baseada** (campo `fonte` em
+[`assets/js/fases.js`](assets/js/fases.js), resolvido em `FONTES`). A ordem de prioridade é:
+
+1. **[AAP / HealthyChildren.org](https://www.healthychildren.org)** — desenvolvimento, pele do
+   recém-nascido, choro, sono, mamada;
+2. **[NHS](https://www.nhs.uk/baby/)** — rotina do recém-nascido e sinais de alerta;
+3. **[CDC — Learn the Signs. Act Early.](https://www.cdc.gov/act-early/milestones/)** — marcos por
+   idade e as listas de "converse com o médico se";
+4. **AASM 2016 / NSF 2015** — horas de sono por 24h (as mesmas já usadas na aba Início) e a
+   **[política de sono seguro da AAP (2022)](https://publications.aap.org/pediatrics/article/150/1/e2022057990/188304/)**;
+5. **BabyCenter** e **The Wonder Weeks** — referência de **produto** (como organizar a informação por
+   idade), **nunca** de autoridade médica.
+
+Três regras estão travadas em teste (`tests/fases.test.mjs`), porque aqui o risco não é o código
+quebrar — é o conteúdo mentir:
+
+- **Nenhuma faixa de idade fica sem guia**, do dia 0 em diante, sem buracos nem sobreposição.
+- **Todo sinal de alerta vem de fonte médica.** Nada de "converse com o pediatra se" inventado, e o
+  Wonder Weeks é recusado como fonte de qualquer fato de saúde.
+- **Desenvolvimento não vira checklist.** Toda frase sobre habilidade aparecendo precisa carregar uma
+  marca de janela ("é comum", "alguns bebês", "pode começar", "por volta de"…) — a lista permitida é
+  `HEDGES` — e nenhum texto pode prometer marco em data fixa.
+
+Sobre os **saltos**: o calendário fixo de 10 saltos do Wonder Weeks **não é consenso científico** (a
+tentativa de replicação de de Weerth & van Geert, 1998, não encontrou o padrão de semanas descrito).
+Por isso o app nunca apresenta salto como evento médico: é uma lente para entender uma fase mais
+difícil, com a ressalva explícita de que não acontece do mesmo jeito com todos os bebês. O que está
+em "o que pode estar acontecendo" é descrito a partir de desenvolvimento infantil (AAP/CDC), não do
+livro.
 
 ## Notificações push pelo ntfy (recomendado — simples, sem servidor)
 
@@ -179,6 +212,7 @@ index.html                 telas (uma <section> por aba)
 assets/css/style.css       tema escuro, botões grandes para uso com uma mão
 assets/js/store.js         estado + localStorage; eventos são a fonte da verdade
 assets/js/format.js        formatação de horas, durações e contagens regressivas
+assets/js/fases.js         guia por fase: conteúdo por idade, saltos e fontes
 assets/js/app.js           renderização das telas, interações e avisos
 assets/js/ntfy.js          push simples via ntfy.sh (imediato e agendado)
 assets/js/wa.js            adaptador de WhatsApp (WAHA/Evolution) — usado no app e no worker
@@ -193,6 +227,7 @@ vercel.json                config da Vercel
 sw.js                      service worker (abre offline)
 tools/make_icons.py        gera os ícones PNG sem dependências
 tests/smoke.mjs            teste de fumaça ponta a ponta (UI no navegador)
+tests/fases.test.mjs       cobertura por idade, fontes e linguagem do guia de fases
 tests/sync.test.mjs        testes do sync (núcleo + helpers do cliente)
 tests/sync-e2e.mjs         dois "celulares" sincronizando ponta a ponta
 server/                    worker 24/7 de WhatsApp + Docker (veja server/README.md)

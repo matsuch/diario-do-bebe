@@ -6,6 +6,7 @@ import {
   fromLocalInput, pad, SIDE_LABEL, toLocalInput,
 } from './format.js';
 import * as CRESC from './crescimento.js';
+import * as GUIA from './fases.js';
 import * as WA from './wa.js';
 import * as NTFY from './ntfy.js';
 import * as SYNC from './sync.js';
@@ -1406,6 +1407,273 @@ function renderChart7d(container, spec) {
   container.append(card);
 }
 
+/* ============================================================== GUIA DA FASE
+ * A aba Evolução abre com um guia do momento do bebê: quantos dias/semanas ele
+ * tem, o que costuma acontecer nesta fase, o que dá para observar, como ajudar
+ * e quando vale conversar com o pediatra. Todo o conteúdo e a regra de "qual
+ * fase vale para esta idade" moram em fases.js — aqui é só desenho.
+ *
+ * Duas escolhas de produto que valem registrar:
+ *
+ *  - O guia NÃO é checklist. Nenhum item tem caixinha de marcar, porque marco
+ *    não cumprido na semana exata não é atraso — e uma caixinha vazia diria o
+ *    contrário.
+ *  - A régua de fases deixa espiar antes e depois, mas sempre com um jeito de
+ *    voltar para hoje: quem abre a aba tem que cair na fase do bebê dele.
+ */
+
+/**
+ * Idade em dias que o guia usa. É o ÚNICO ponto a mudar no dia em que o
+ * cadastro guardar data prevista do parto / prematuridade: basta devolver a
+ * idade corrigida aqui, porque fases.js só recebe dias.
+ */
+function idadeGuia() {
+  return S.ageDays();
+}
+
+let faseEspiada = null;  // fase aberta na régua (null = a fase de hoje)
+let guiaDesenhado = '';  // o que já está na tela, para não redesenhar a cada evento
+
+/** <ul> de itens do conteúdo (aceita string ou { texto, fonte }). */
+function listaGuia(itens, extra = '') {
+  const ul = el('ul', `guia-lista${extra ? ` ${extra}` : ''}`);
+  itens.forEach((it) => {
+    const li = document.createElement('li');
+    li.textContent = typeof it === 'string' ? it : it.texto;
+    ul.append(li);
+  });
+  return ul;
+}
+
+/** Cabeçalho de um card: ícone redondo + título + subtítulo. */
+function topoGuia(emoji, tint, titulo, sub) {
+  const topo = el('div', 'guia-card-top');
+  topo.append(el('span', `guia-ic ${tint}`, emoji));
+  const txt = el('div', 'guia-card-txt');
+  txt.append(el('b', null, titulo));
+  if (sub) txt.append(el('span', 'muted small', sub));
+  topo.append(txt);
+  return topo;
+}
+
+/** Sem data de nascimento não existe fase — peça o dado em vez de sumir. */
+function guiaSemData(container) {
+  const card = el('div', 'card guia-vazio');
+  card.append(el('b', null, 'Um guia do que está acontecendo com o seu bebê'));
+  card.append(el('p', 'muted small',
+    'Informe a data de nascimento nos Ajustes para a aba mostrar, por idade, o que costuma '
+    + 'acontecer nesta fase, o que você pode observar e quando vale conversar com o pediatra.'));
+  const btn = el('button', 'btn btn-primary block', 'Informar data de nascimento');
+  btn.type = 'button';
+  btn.addEventListener('click', () => irPara('ajustes'));
+  card.append(btn);
+  container.append(card);
+}
+
+/** "Hoje seu bebê está com X" — ou o aviso de que você está espiando outra fase. */
+function cardIdade(container, dias, fase, faseHoje) {
+  const espiando = fase.id !== faseHoje.id;
+  const card = el('div', `guia-hero${espiando ? ' is-preview' : ''}`);
+
+  if (espiando) {
+    const futura = GUIA.indiceDaFase(fase.id) > GUIA.indiceDaFase(faseHoje.id);
+    card.append(el('span', 'guia-kicker', futura ? 'Espiando o que vem por aí' : 'Olhando uma fase que já passou'));
+    card.append(el('b', 'guia-idade', fase.titulo));
+    card.append(el('span', 'guia-dias', `Seu bebê está com ${GUIA.idadeTexto(dias)} — ${faseHoje.titulo}`));
+  } else {
+    card.append(el('span', 'guia-kicker', 'Hoje seu bebê está com'));
+    card.append(el('b', 'guia-idade', GUIA.idadeTexto(dias)));
+    // A idade (semanas COMPLETAS) e o nome da fase (a semana que ele está
+    // vivendo) são dois números diferentes do mesmo dia: aos 35 dias são
+    // "5 semanas" e a "6ª semana". Lado a lado na mesma linha isso confunde,
+    // então o nome da fase desce para a etiqueta do bloco de conteúdo.
+    const detalhe = [`${dias} ${dias === 1 ? 'dia de vida' : 'dias de vida'}`];
+    const falta = GUIA.diasAteProximaFase(dias);
+    if (falta != null) detalhe.push(falta === 1 ? 'muda de fase amanhã' : `faltam ${falta} dias para a próxima fase`);
+    card.append(el('span', 'guia-dias', detalhe.join(' · ')));
+  }
+
+  const cabeca = el('div', 'guia-titulo-bloco');
+  cabeca.append(el('span', 'guia-fase-tag', fase.titulo));
+  cabeca.append(el('h2', 'guia-titulo', 'O que pode acontecer nesta fase'));
+  card.append(cabeca);
+  card.append(el('p', 'guia-resumo', fase.resumo));
+
+  if (espiando) {
+    const voltar = el('button', 'btn btn-ghost block', 'Voltar para a fase de hoje');
+    voltar.type = 'button';
+    voltar.addEventListener('click', () => { faseEspiada = null; guiaDesenhado = ''; renderGuia(); });
+    card.append(voltar);
+  }
+  container.append(card);
+}
+
+/** Régua de fases: progressão temporal, rolável, com a fase atual destacada. */
+function cardRegua(container, fase, faseHoje) {
+  const regua = el('div', 'guia-regua');
+  GUIA.FASES.forEach((f) => {
+    const chip = el('button', 'guia-chip', null);
+    chip.type = 'button';
+    chip.textContent = f.chip;
+    chip.title = f.titulo;
+    if (f.id === faseHoje.id) chip.classList.add('is-hoje');
+    if (f.id === fase.id) { chip.classList.add('is-on'); chip.setAttribute('aria-current', 'true'); }
+    chip.addEventListener('click', () => {
+      faseEspiada = f.id === faseHoje.id ? null : f.id;
+      guiaDesenhado = '';
+      renderGuia();
+    });
+    regua.append(chip);
+  });
+  container.append(regua);
+  // Centraliza a fase aberta sem mexer na rolagem da página (por isso não é
+  // scrollIntoView: ele arrastaria a tela inteira no celular).
+  const ativo = regua.querySelector('.is-on');
+  if (ativo) regua.scrollLeft = ativo.offsetLeft - (regua.clientWidth - ativo.offsetWidth) / 2;
+}
+
+/** Card do salto de desenvolvimento, quando a idade cai numa das janelas. */
+function cardSalto(container, salto) {
+  const card = el('div', 'card guia-salto');
+  card.append(topoGuia('✨', 'tint-sleep', `Período de salto · ${salto.semanas}`, salto.titulo));
+  card.append(el('p', 'guia-nota',
+    'Alguns bebês ficam mais irritados, pedem mais colo ou mudam o sono enquanto uma habilidade '
+    + 'nova amadurece. Isso não acontece da mesma maneira com todos os bebês, e muitos passam '
+    + 'por esta fase sem nada disso — não é um evento médico nem um calendário exato.'));
+  card.append(el('b', 'guia-sub', 'O que você pode perceber'));
+  card.append(listaGuia(salto.perceber));
+  card.append(el('b', 'guia-sub', 'O que pode estar acontecendo'));
+  card.append(el('p', 'guia-p', salto.amadurecendo));
+  container.append(card);
+}
+
+/** "O que seu bebê pode estar sentindo": cards curtos, linguagem de cuidado. */
+function cardsSentindo(container, fase) {
+  container.append(el('h2', 'section-title', 'O que seu bebê pode estar sentindo'));
+  const grade = el('div', 'guia-sent-grid');
+  fase.sentindo.forEach((s) => {
+    const c = el('div', 'card guia-sent');
+    c.append(el('b', null, s.titulo));
+    c.append(el('p', 'guia-p', s.texto));
+    grade.append(c);
+  });
+  container.append(grade);
+}
+
+/** Categorias em sanfona: a primeira já aberta, as outras com uma prévia. */
+function cardsCategorias(container, fase) {
+  container.append(el('h2', 'section-title', 'Nesta fase, por área'));
+  const stack = el('div', 'stack');
+  GUIA.CATEGORIAS.forEach((cat, i) => {
+    const itens = fase.blocos[cat.id] || [];
+    if (!itens.length) return;
+    const acc = el('details', 'guia-acc');
+    acc.open = i === 0;
+    const sum = document.createElement('summary');
+    sum.append(el('span', `guia-ic ${cat.tint}`, cat.emoji));
+    const txt = el('div', 'guia-card-txt');
+    txt.append(el('b', null, cat.rotulo));
+    txt.append(el('span', 'guia-prev', itens[0].texto));
+    sum.append(txt);
+    sum.append(el('span', 'guia-seta', '›'));
+    acc.append(sum, listaGuia(itens));
+    stack.append(acc);
+  });
+  container.append(stack);
+}
+
+/** "O que você pode fazer" — sugestões da idade, nunca prescrição. */
+function cardFazer(container, fase) {
+  const card = el('div', 'card guia-fazer');
+  card.append(topoGuia('🤲', 'tint-lamp', 'Você pode ajudar assim', 'Ideias simples para esta fase'));
+  card.append(listaGuia(fase.fazer, 'is-check'));
+  card.append(el('p', 'muted small', 'São sugestões gerais para a idade e não substituem a orientação do pediatra.'));
+  container.append(card);
+}
+
+/** "Quando procurar orientação" — separa "pode ser normal" de "converse com o pediatra". */
+function cardAtencao(container, fase, dias) {
+  const card = el('div', 'card guia-alerta');
+  card.append(topoGuia('🩺', 'tint-med', 'Quando procurar orientação',
+    'Esta aba não diagnostica nada — ela ajuda a saber a hora de perguntar.'));
+  card.append(el('p', 'guia-ok',
+    'Tudo o que está acima é o que costuma ser comum nesta fase e varia bastante de bebê para bebê.'));
+  card.append(el('b', 'guia-sub', 'Converse com o pediatra se'));
+  card.append(listaGuia(fase.atencao));
+
+  const urgente = GUIA.urgenteParaIdade(dias);
+  if (urgente) {
+    card.append(el('b', 'guia-sub is-urgente', urgente.titulo));
+    card.append(listaGuia(urgente.itens, 'is-urgente'));
+  }
+  container.append(card);
+}
+
+/** Rodapé: em que fontes cada coisa foi baseada. */
+function cardFontes(container, fase) {
+  const det = el('details', 'guia-fontes');
+  const sum = document.createElement('summary');
+  sum.textContent = 'De onde vem esta informação';
+  det.append(sum);
+  const ul = el('ul', 'guia-lista');
+  GUIA.fontesDaFase(fase).forEach((sigla) => {
+    const fonte = GUIA.FONTES[sigla];
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = fonte.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = fonte.nome;
+    li.append(a);
+    ul.append(li);
+  });
+  det.append(ul);
+  det.append(el('p', 'muted small',
+    'Os textos são escritos por nós a partir dessas fontes, nunca copiados delas. Referências de '
+    + 'aplicativos como BabyCenter e The Wonder Weeks serviram só para pensar o formato da tela.'));
+  container.append(det);
+}
+
+/** Monta (ou reaproveita) o guia da fase na aba Evolução. */
+function renderGuia() {
+  const cabeca = $('#guiaIdade');
+  const regua = $('#guiaRegua');
+  const corpo = $('#guiaConteudo');
+  const dias = idadeGuia();
+
+  if (dias == null) {
+    if (guiaDesenhado === 'sem-data') return;
+    guiaDesenhado = 'sem-data';
+    cabeca.innerHTML = ''; regua.innerHTML = ''; corpo.innerHTML = '';
+    guiaSemData(cabeca);
+    return;
+  }
+
+  const faseHoje = GUIA.faseParaIdade(dias);
+  const fase = (faseEspiada && GUIA.FASES.find((f) => f.id === faseEspiada)) || faseHoje;
+  if (!fase) return;
+
+  // Redesenhar a cada mamada registrada apagaria as sanfonas que o pai abriu.
+  const chave = `${fase.id}|${faseHoje.id}|${dias}`;
+  if (guiaDesenhado === chave) return;
+  guiaDesenhado = chave;
+
+  cabeca.innerHTML = ''; regua.innerHTML = ''; corpo.innerHTML = '';
+  cardIdade(cabeca, dias, fase, faseHoje);
+  cardRegua(regua, fase, faseHoje);
+
+  // Espiando outra fase, o salto mostrado é o daquela fase, não o de hoje.
+  const refSalto = fase.id === faseHoje.id ? dias : Math.min(fase.de + 3, fase.ate);
+  const salto = GUIA.saltoParaIdade(refSalto);
+  if (salto) cardSalto(corpo, salto);
+
+  cardsSentindo(corpo, fase);
+  cardsCategorias(corpo, fase);
+  cardFazer(corpo, fase);
+  cardAtencao(corpo, fase, fase.id === faseHoje.id ? dias : fase.de);
+  cardFontes(corpo, fase);
+}
+
 /* ================================================================ EVOLUÇÃO */
 
 const MEDIDAS = [
@@ -1457,6 +1725,7 @@ function renderEvolucao() {
     : 'Curvas de crescimento da OMS e referências gerais por idade — não é conselho médico.';
 
   renderEvolucaoRotina($('#evolucaoRotina'));
+  renderGuia();
 }
 
 /** Como a rotina dos últimos 7 dias se compara com o esperado para a idade. */
