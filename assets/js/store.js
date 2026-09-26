@@ -62,7 +62,7 @@ function estadoInicial() {
     // perfil sincronizado: é por aparelho, e viaja junto do cronômetro em
     // andamento para o outro celular saber quem começou a mamada/soneca.
     device: { name: '' },
-    activeFeed: null,   // { startAt, side, segments: [{side, min}], by }
+    activeFeed: null,   // { startAt, side, segments: [{side, min}], relactation, by }
     activeSleep: null,  // { startAt, by }
     activeBurp: null,   // { startAt, by } — cronômetro de arroto
   };
@@ -221,7 +221,15 @@ export function finishFeed() {
     durationMin: Math.max(1, Math.round((agora - f.startAt) / MS_MIN)),
     sides: Object.fromEntries(Object.entries(porLado).map(([k, ms]) => [k, Math.round(ms / MS_MIN)])),
     lastSide: f.side,
+    relactation: !!f.relactation,
   });
+}
+
+/** Marca (ou desmarca) a mamada em andamento como relactação. */
+export function setFeedRelactation(ligado) {
+  if (!state.activeFeed) return;
+  state.activeFeed.relactation = !!ligado;
+  save();
 }
 
 export function cancelFeed() {
@@ -303,7 +311,7 @@ export function ongoingEvents(agora = Date.now()) {
     lista.push({
       id: ONGOING_ID.feed, type: 'feed', ongoing: 'feed', at: f.startAt, endAt: null,
       durationMin: Math.round(Math.max(0, agora - f.startAt) / MS_MIN),
-      sides: ladosAtivos(f, agora), lastSide: f.side, by: f.by || '',
+      sides: ladosAtivos(f, agora), lastSide: f.side, relactation: !!f.relactation, by: f.by || '',
     });
   }
   if (state.activeSleep) {

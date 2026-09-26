@@ -812,6 +812,8 @@ function linhaEvento(ev, { apagavel = true } = {}) {
 
 /* ================================================================ MAMADA */
 
+let tinhaMamadaAtiva = false;
+
 function renderMamada() {
   const ativa = state.activeFeed;
   const timer = $('#feedTimer');
@@ -845,6 +847,13 @@ function renderMamada() {
     btn.innerHTML = `${side === 'E' ? 'Esquerdo' : 'Direito'}<span class="side-min">${
       ativa ? `${min} min` : (sugerido === side ? 'sugerido' : '')}</span>`;
   });
+
+  // Sem cronômetro rodando, o switch vale para a próxima mamada iniciada;
+  // quando uma mamada termina (aqui ou no outro celular), ele volta a desligado.
+  const relact = $('#feedRelact');
+  if (ativa) relact.checked = !!ativa.relactation;
+  else if (tinhaMamadaAtiva) relact.checked = false;
+  tinhaMamadaAtiva = !!ativa;
 
   $('#btnFeedFinish').hidden = !ativa;
   $('#btnFeedCancel').hidden = !ativa;
@@ -910,6 +919,8 @@ function sheetMamada(ev = null) {
       <input type="number" name="min" value="${minAtual}" min="1" max="240" inputmode="numeric" required></label>
     <label class="field"><span>Lado</span>
       <select name="side">${opcoes}</select></label>
+    <label class="switch"><span>Relactação</span>
+      <input type="checkbox" name="relactation"${ev && ev.relactation ? ' checked' : ''}></label>
     <button class="btn btn-primary block" type="submit">Salvar mamada</button>
     ${ev ? '<button class="btn btn-ghost block" type="button" id="mamadaDel">Apagar registro</button>' : ''}`;
   form.addEventListener('submit', (e) => {
@@ -921,6 +932,7 @@ function sheetMamada(ev = null) {
     const campos = {
       at, endAt: at + min * MS_MIN, durationMin: min,
       ...ladosDaMamada(dados.get('side'), min, ev),
+      relactation: dados.get('relactation') === 'on',
     };
     if (ev) S.updateEvent(ev.id, campos);
     else S.addEvent({ type: 'feed', ...campos });
@@ -2334,8 +2346,15 @@ function ligarEventos() {
     vibrar();
     const side = btn.dataset.side;
     if (state.activeFeed) S.switchSide(side);
-    else S.startFeed(side);
+    else {
+      S.startFeed(side);
+      if ($('#feedRelact').checked) S.setFeedRelactation(true);
+    }
   }));
+
+  $('#feedRelact').addEventListener('change', (e) => {
+    if (state.activeFeed) S.setFeedRelactation(e.target.checked);
+  });
 
   $('#btnFeedFinish').addEventListener('click', () => {
     const ev = S.finishFeed();
