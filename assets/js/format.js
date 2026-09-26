@@ -94,5 +94,6 @@ export function describeFeed(ev) {
     .filter(([, min]) => min > 0)
     .map(([side, min]) => `${SIDE_LABEL[side] || side} ${min}min`);
   if (lados.length) partes.push(lados.join(' + '));
+  if (ev.relactation) partes.push('relactação');
   return partes.join(' · ') || 'mamada';
 }
