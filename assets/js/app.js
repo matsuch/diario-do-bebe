@@ -769,6 +769,7 @@ function linhaEvento(ev, { apagavel = true } = {}) {
     item.classList.add('is-live');
     titulo.append(' ', el('span', 'live-pill', '<i></i>em andamento'));
   }
+  if (ev.type === 'feed' && ev.relactation) titulo.append(' ', el('span', 'tag-pill', 'relactação'));
   const sub = el('div', 'item-sub');
   sub.textContent = subtituloEvento(ev);
   corpo.append(titulo, sub);
@@ -994,20 +995,23 @@ function sheetSono(ev = null) {
 
 /**
  * Registro EM ANDAMENTO (mamada, sono ou arroto): enquanto o cronômetro roda,
- * a única coisa que dá para corrigir é a hora em que começou — a duração é o
- * relógio. Também dá para cancelar, e aí nada vai para o histórico.
+ * a única coisa que dá para corrigir é a hora em que começou (e, na mamada,
+ * se é relactação) — a duração é o relógio. Também dá para cancelar, e aí
+ * nada vai para o histórico.
  */
 function sheetAndamento(ev) {
   const NOME = { feed: 'mamada', sleep: 'sono', burp: 'arroto' };
   const nome = NOME[ev.ongoing] || 'registro';
   const form = el('form');
   form.innerHTML = `
-    <p class="muted small">Em andamento: só o início pode mudar agora. A duração acompanha o
+    <p class="muted small">Em andamento: só o início${ev.ongoing === 'feed' ? ' e a relactação podem' : ' pode'} mudar agora. A duração acompanha o
       cronômetro e o resto fica editável quando você encerrar.</p>
     <label class="field"><span>Começou às</span>
       <input type="datetime-local" name="at" value="${toLocalInput(ev.at)}" max="${toLocalInput(Date.now())}" required></label>
     <p class="muted small" id="andDur" aria-live="polite"></p>
-    <button class="btn btn-primary block" type="submit">Salvar início</button>
+    ${ev.ongoing === 'feed' ? `<label class="switch"><span>Relactação</span>
+      <input type="checkbox" name="relactation"${ev.relactation ? ' checked' : ''}></label>` : ''}
+    <button class="btn btn-primary block" type="submit">Salvar</button>
     <button class="btn btn-ghost block" type="button" id="andCancel">Cancelar ${nome}</button>`;
 
   const aviso = form.querySelector('#andDur');
@@ -1026,9 +1030,10 @@ function sheetAndamento(ev) {
     if (!at) { toast('Confira o horário'); return; }
     if (at > Date.now()) { toast('O início não pode estar no futuro'); return; }
     S.setOngoingStart(ev.ongoing, at);
+    if (ev.ongoing === 'feed') S.setFeedRelactation(form.relactation.checked);
     if (ev.ongoing === 'burp') burpAvisado = false; // a meta é recontada do novo início
     closeSheet();
-    toast(`Início ajustado para ${fmtTime(at)}`);
+    toast(ev.ongoing === 'feed' ? 'Mamada em andamento atualizada' : `Início ajustado para ${fmtTime(at)}`);
   });
 
   form.querySelector('#andCancel').addEventListener('click', () => {

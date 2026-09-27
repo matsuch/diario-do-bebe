@@ -553,6 +553,15 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
   50% { opacity: .3; transform: scale(.65); }
 }
 @media (prefers-reduced-motion: reduce) { .live-pill i { animation: none; } }
+/* flag de um atributo do registro (ex.: relactação na mamada) */
+.tag-pill {
+  display: inline-flex; align-items: center; vertical-align: 1px;
+  margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--diaper); white-space: nowrap;
+  background: color-mix(in oklab, var(--diaper) 16%, transparent);
+  border: 1px solid color-mix(in oklab, var(--diaper) 40%, transparent);
+}
 .empty { color: var(--muted); text-align: center; padding: 26px 8px; font-size: 14px; font-weight: 600; }
 
 /* ---------- timer (mamada / arroto / sono) ---------- */
