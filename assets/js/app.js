@@ -659,9 +659,9 @@ function renderResumo(grid, resumo) {
   grid.innerHTML = '';
   const stats = [
     ['🍼', resumo.mamadas, 'mamadas'],
+    ['⏱️', fmtMin(resumo.minutosMamando), 'mamando'],
     ['💧', resumo.xixis, 'xixis'],
     ['💩', resumo.cocos, 'cocôs'],
-    ['💨', resumo.arrotos, 'arrotos'],
     ['😴', resumo.minutosDormindo ? fmtMin(resumo.minutosDormindo) : '0', 'sono'],
   ];
   stats.forEach(([emoji, valor, rotulo]) => {

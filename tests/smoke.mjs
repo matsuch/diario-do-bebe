@@ -109,8 +109,9 @@ try {
     `arroto não registrou duração: ${JSON.stringify(burps)}`);
   checar((await page.textContent('#quickArrotoLabel')).trim() === 'Arroto',
     'botão de arroto não voltou para "Arroto" após finalizar');
-  checar((await page.locator('#todayGrid .stat').allTextContents()).some((t) => t.includes('arrotos')),
-    'resumo do dia não mostra arrotos');
+  const stats = await page.locator('#todayGrid .stat').allTextContents();
+  checar(!stats.some((t) => t.includes('arrotos')), 'resumo do dia ainda mostra arrotos');
+  checar(stats.some((t) => t.includes('mamando')), 'resumo do dia não mostra o tempo de mamada');
 
   // registros EM ANDAMENTO: entram na lista da Home antes de encerrar, já contam
   // no resumo do dia, marcam "em andamento" e só deixam mudar o início.
