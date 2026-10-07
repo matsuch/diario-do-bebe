@@ -496,13 +496,115 @@ export function lastWakeAt() {
   return s ? s.endAt : null;
 }
 
+/* ------------------------------------------------------------------ personalização
+ *
+ * Apps como o Napper começam pela janela da idade e, conforme o bebê tem
+ * registros, passam a usar o que ele realmente faz. Aqui: a mediana dos tempos
+ * acordado (entre o fim de um sono e o início do próximo) das sonecas recentes
+ * de dia, misturada com a janela da idade (peso cresce até 100% com 10 amostras)
+ * e limitada a ±40% da faixa da idade, para um dia atípico não distorcer tudo.
+ */
+const PERSONAL_MIN_SAMPLES = 4;
+const PERSONAL_FULL_SAMPLES = 10;
+const PERSONAL_DAYS = 10;
+
+function median(arr) {
+  const s = [...arr].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** Tempos acordado (min) que terminaram em soneca diurna nos últimos dias. */
+export function awakeGapsMin(ref = Date.now()) {
+  const desde = ref - PERSONAL_DAYS * 24 * MS_HOUR;
+  const sonos = state.events
+    .filter((e) => !e.deleted && e.type === 'sleep' && e.endAt && e.at >= desde - 24 * MS_HOUR)
+    .sort((a, b) => a.at - b.at);
+  const gaps = [];
+  for (let i = 1; i < sonos.length; i += 1) {
+    const ant = sonos[i - 1]; const cur = sonos[i];
+    if (cur.at < desde) continue;
+    const h = new Date(cur.at).getHours();
+    const gap = (cur.at - ant.endAt) / MS_MIN;
+    if (h < 6 || h >= 19) continue;          // só soneca de dia
+    if (gap < 20 || gap > 8 * 60) continue;  // descarta lixo e noite
+    gaps.push(gap);
+  }
+  return gaps;
+}
+
+/** Janela de sono personalizada: { min, max, personal, n } (ou a da idade). */
+export function personalWakeWindow(ref = Date.now()) {
+  const base = wakeWindow(ref);
+  const gaps = awakeGapsMin(ref);
+  if (gaps.length < PERSONAL_MIN_SAMPLES) return { ...base, personal: false, n: gaps.length };
+  const peso = Math.min(1, gaps.length / PERSONAL_FULL_SAMPLES);
+  const mid = (base.min + base.max) / 2;
+  const alvo = Math.min(base.max * 1.4, Math.max(base.min * 0.6, median(gaps)));
+  const centro = mid * (1 - peso) + alvo * peso;
+  const meia = Math.max(10, (base.max - base.min) / 2 * 0.75); // faixa um pouco mais estreita
+  return { d: base.d, min: Math.round(centro - meia), max: Math.round(centro + meia), personal: true, n: gaps.length };
+}
+
 /** Próxima soneca sugerida: { wake, start, end, window } — ou null se dormindo/sem dados. */
 export function nextNap(ref = Date.now()) {
   if (state.activeSleep) return null;
   const wake = lastWakeAt();
   if (!wake) return null;
-  const w = wakeWindow(ref);
+  const w = personalWakeWindow(ref);
   return { wake, start: wake + w.min * MS_MIN, end: wake + w.max * MS_MIN, window: w };
+}
+
+/** Intervalo médio recente entre mamadas (início a início), em min — ou null. */
+export function recentFeedIntervalMin(ref = Date.now()) {
+  const desde = ref - 3 * 24 * MS_HOUR;
+  const mam = state.events
+    .filter((e) => !e.deleted && e.type === 'feed' && e.at >= desde)
+    .sort((a, b) => a.at - b.at);
+  const gaps = [];
+  for (let i = 1; i < mam.length; i += 1) {
+    const g = (mam[i].at - mam[i - 1].at) / MS_MIN;
+    if (g >= 30 && g <= 6 * 60) gaps.push(g);
+  }
+  if (gaps.length < 6) return null;
+  const cfg = state.settings.feedIntervalMin;
+  return Math.round(Math.min(cfg * 1.5, Math.max(cfg * 0.5, median(gaps))));
+}
+
+/** Próxima mamada prevista pelo padrão recente (só para a Home; lembretes seguem o intervalo configurado). */
+export function predictedFeedAt() {
+  const ultima = lastEvent('feed');
+  if (!ultima) return null;
+  const intervalo = recentFeedIntervalMin();
+  if (intervalo == null) return nextFeedAt(); // sem histórico: intervalo configurado
+  return ultima.at + intervalo * MS_MIN;
+}
+
+/**
+ * Risco de irritação, calculado do que já está registrado (sem registro de choro):
+ *  - passou da janela de sono acordado (cansaço — o que mais vira choro);
+ *  - passou da hora prevista da mamada (fome — sinais precoces vêm antes do choro);
+ *  - fim de tarde em bebê pequeno (pico de choro costuma ser ali).
+ * Devolve { level: 'alto'|'medio', motivos: [...] } ou null.
+ */
+export function fussRisk(ref = Date.now()) {
+  if (state.activeSleep || state.activeFeed) return null;
+  const motivos = []; let score = 0;
+  const nap = nextNap(ref);
+  if (nap) {
+    if (ref > nap.end + 15 * MS_MIN) { motivos.push('passou da janela de sono — cansaço vira choro'); score += 2; }
+    else if (ref >= nap.start) { motivos.push('já está na janela de sono'); score += 1; }
+  }
+  const feed = predictedFeedAt();
+  if (feed) {
+    if (ref > feed + 30 * MS_MIN) { motivos.push('mamada atrasada — pode estar com fome'); score += 2; }
+    else if (ref >= feed - 10 * MS_MIN) { motivos.push('hora de mamar chegando'); score += 1; }
+  }
+  const h = new Date(ref).getHours();
+  const dias = ageDays(ref);
+  if (dias != null && dias <= 120 && h >= 16 && h < 21) { motivos.push('fim de tarde: pico de irritação nessa idade'); score += 1; }
+  if (score < 2) return null;
+  return { level: score >= 3 ? 'alto' : 'medio', motivos };
 }
 
 /* ------------------------------------------------------------------ remédios */

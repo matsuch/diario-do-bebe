@@ -172,6 +172,21 @@ function cardSonoAtivo() {
   return card;
 }
 
+/** Alerta na Home: bebê com risco de ficar irritado/chorando (só dados já registrados). */
+function cardIrritacao() {
+  const r = S.fussRisk();
+  if (!r) return null;
+  const card = el('div', `next ${r.level === 'alto' ? 'is-late' : 'is-due'}`);
+  card.append(el('div', 'emoji', r.level === 'alto' ? '😭' : '😣'));
+  const corpo = el('div', 'next-body');
+  corpo.append(
+    el('div', 'next-title', r.level === 'alto' ? 'Risco alto de choro' : 'Pode ficar irritado'),
+    el('div', 'next-sub', r.motivos.join(' · ')),
+  );
+  card.append(corpo);
+  return card;
+}
+
 /** Card de janela de sono / próxima soneca (quando acordado). Toque = iniciar sono. */
 function cardJanelaSono() {
   const nap = S.nextNap();
@@ -183,7 +198,7 @@ function cardJanelaSono() {
   let titulo; let sub; let quando; let estado = '';
   if (agora < nap.start) {
     titulo = 'Próxima soneca';
-    sub = `acordado há ${acordado} · janela ${w.min}–${w.max}min`;
+    sub = `acordado há ${acordado} · janela ${w.min}–${w.max}min${w.personal ? ' (aprendida do seu bebê)' : ''}`;
     quando = `~${fmtTime(nap.start)}`;
   } else if (agora < nap.end) {
     titulo = 'Hora da soneca 🌙';
@@ -306,7 +321,7 @@ function heroFoco() {
   if (state.activeFeed) return { label: 'Mamando agora', big: `desde ${fmtTime(state.activeFeed.startAt)}`, tone: 'lamp' };
   if (state.activeSleep) return { label: 'Dormindo', big: fmtHM(Date.now() - state.activeSleep.startAt), tone: 'sleep', at: state.activeSleep.startAt };
   const cand = [];
-  const feed = S.nextFeedAt();
+  const feed = S.predictedFeedAt();
   if (feed) cand.push({ at: feed, label: 'Próxima mamada', tone: 'lamp' });
   const nap = S.nextNap();
   if (nap) cand.push({ at: nap.start, label: 'Próxima soneca', tone: 'sleep' });
@@ -598,6 +613,19 @@ function renderAgora() {
   cards.innerHTML = '';
   if (state.activeBurp) cards.append(cardArroto());
   if (state.activeSleep) cards.append(cardSonoAtivo());
+  const risco = cardIrritacao();
+  if (risco) cards.append(risco);
+  const soneca = cardJanelaSono();
+  if (soneca) cards.append(soneca);
+  const mamadaPrevista = S.predictedFeedAt();
+  if (mamadaPrevista && !state.activeFeed) {
+    const intervalo = S.recentFeedIntervalMin();
+    cards.append(cartaoProximo({
+      emoji: '🍼', titulo: 'Próxima mamada',
+      sub: intervalo ? `padrão recente: a cada ~${fmtMin(intervalo)}` : `intervalo configurado: ${fmtMin(state.settings.feedIntervalMin)}`,
+      at: mamadaPrevista, onClick: () => irPara('mamada'),
+    }));
+  }
   if (state.activeFeed) {
     cards.append(cartaoProximo({
       emoji: '🍼', titulo: 'Mamando agora',
