@@ -165,5 +165,64 @@ teste('WAKE_WINDOWS: sonecas implicadas batem com os dados de Galland 2012', () 
   assert.ok(m12 >= 1 && m12 <= 2.5, `9–12 meses implica ${m12.toFixed(1)} sonecas; Galland mede ~1,2 aos 12 meses`);
 });
 
+/* ---- personalização e risco de irritação ---- */
+import { personalWakeWindow, recentFeedIntervalMin, predictedFeedAt, fussRisk } from '../assets/js/store.js';
+
+function limpar() { state.events.length = 0; state.activeSleep = null; state.activeFeed = null; }
+const H = 3600000; const M = 60000;
+/** Meio-dia de `d` dias atrás, em ms. */
+const meioDia = (d) => { const t = new Date(Date.now() - d * 86400000); t.setHours(12, 0, 0, 0); return t.getTime(); };
+
+teste('personalWakeWindow: poucos dados -> janela da idade', () => {
+  limpar(); state.baby.birth = dias(150);
+  const w = personalWakeWindow();
+  assert.equal(w.personal, false);
+  assert.deepEqual([w.min, w.max], [120, 165]);
+});
+
+teste('personalWakeWindow: aprende o tempo acordado real do bebê', () => {
+  limpar(); state.baby.birth = dias(150); // idade: 120–165 (centro ~142)
+  // 12 sonecas diurnas, sempre depois de ~100 min acordado
+  for (let d = 1; d <= 6; d += 1) {
+    const base = meioDia(d);
+    addEvent({ type: 'sleep', at: base - 4 * H, endAt: base - 3 * H });
+    addEvent({ type: 'sleep', at: base - 3 * H + 100 * M, endAt: base - 2 * H });
+    addEvent({ type: 'sleep', at: base - 2 * H + 100 * M, endAt: base - 1 * H });
+  }
+  const w = personalWakeWindow();
+  assert.equal(w.personal, true);
+  assert.ok(w.max < 165 && (w.min + w.max) / 2 < 130, `deveria puxar para ~100 min: ${JSON.stringify(w)}`);
+  assert.ok(w.min >= 120 * 0.6 - 15, 'limitada a 60% da faixa da idade');
+});
+
+teste('recentFeedIntervalMin / predictedFeedAt: usa o padrão recente', () => {
+  limpar();
+  const agora = Date.now();
+  for (let i = 8; i >= 1; i -= 1) addEvent({ type: 'feed', at: agora - i * 150 * M });
+  assert.equal(recentFeedIntervalMin(), 150);
+  assert.equal(predictedFeedAt(), agora - 150 * M + 150 * M);
+});
+
+teste('predictedFeedAt sem histórico cai no intervalo configurado', () => {
+  limpar();
+  addEvent({ type: 'feed', at: Date.now() - 60 * M, endAt: Date.now() - 50 * M });
+  assert.equal(recentFeedIntervalMin(), null);
+  assert.equal(predictedFeedAt(), Date.now() - 50 * M + state.settings.feedIntervalMin * M);
+});
+
+teste('fussRisk: acordado há muito tempo + mamada atrasada = risco alto; recém-dormido = null', () => {
+  limpar(); state.baby.birth = dias(30);
+  const agora = Date.now();
+  addEvent({ type: 'sleep', at: agora - 5 * H, endAt: agora - 4 * H });
+  addEvent({ type: 'feed', at: agora - 4 * H, endAt: agora - 4 * H + 15 * M });
+  const r = fussRisk();
+  assert.equal(r.level, 'alto');
+  assert.ok(r.motivos.length >= 2);
+  limpar();
+  addEvent({ type: 'sleep', at: agora - 20 * M, endAt: agora - 5 * M });
+  addEvent({ type: 'feed', at: agora - 10 * M, endAt: agora - 5 * M });
+  assert.equal(fussRisk(), null);
+});
+
 if (falhas) { console.error(`\n${falhas} teste(s) falharam.`); process.exit(1); }
 console.log('\nOK — lógica de sono (janelas + soneca) passou.');
