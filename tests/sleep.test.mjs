@@ -166,7 +166,7 @@ teste('WAKE_WINDOWS: sonecas implicadas batem com os dados de Galland 2012', () 
 });
 
 /* ---- personalização e risco de irritação ---- */
-import { personalWakeWindow, recentFeedIntervalMin, predictedFeedAt, fussRisk } from '../assets/js/store.js';
+import { personalWakeWindow, recentFeedIntervalMin, predictedFeedAt, fussRisk, periodoDe } from '../assets/js/store.js';
 
 function limpar() { state.events.length = 0; state.activeSleep = null; state.activeFeed = null; }
 const H = 3600000; const M = 60000;
@@ -222,6 +222,59 @@ teste('fussRisk: acordado há muito tempo + mamada atrasada = risco alto; recém
   addEvent({ type: 'sleep', at: agora - 20 * M, endAt: agora - 5 * M });
   addEvent({ type: 'feed', at: agora - 10 * M, endAt: agora - 5 * M });
   assert.equal(fussRisk(), null);
+});
+
+const hora = (d, h, m = 0) => { const t = new Date(Date.now() - d * 86400000); t.setHours(h, m, 0, 0); return t.getTime(); };
+
+teste('periodoDe: dia 6–18, noite 18–24, madrugada 0–6', () => {
+  assert.equal(periodoDe(hora(1, 5, 59)), 'madrugada');
+  assert.equal(periodoDe(hora(1, 6)), 'dia');
+  assert.equal(periodoDe(hora(1, 17, 59)), 'dia');
+  assert.equal(periodoDe(hora(1, 18)), 'noite');
+  assert.equal(periodoDe(hora(1, 0)), 'madrugada');
+});
+
+teste('personalWakeWindow: cada período tem a sua média', () => {
+  limpar(); state.baby.birth = dias(150); // faixa da idade 120–165
+  for (let d = 1; d <= 6; d += 1) {
+    // dia: ~150 min acordado; madrugada: ~70 min acordado
+    addEvent({ type: 'sleep', at: hora(d, 8), endAt: hora(d, 9) });
+    addEvent({ type: 'sleep', at: hora(d, 9, 0) + 150 * M, endAt: hora(d, 9, 0) + 200 * M });
+    addEvent({ type: 'sleep', at: hora(d, 3), endAt: hora(d, 3, 30) });
+    addEvent({ type: 'sleep', at: hora(d, 3, 30) + 70 * M, endAt: hora(d, 5, 30) });
+  }
+  const dia = personalWakeWindow(Date.now(), 'dia');
+  const mad = personalWakeWindow(Date.now(), 'madrugada');
+  assert.equal(dia.escopo, 'periodo');
+  assert.equal(mad.escopo, 'periodo');
+  assert.ok((dia.min + dia.max) / 2 > (mad.min + mad.max) / 2 + 20,
+    `dia deveria ter vigília maior que madrugada: ${JSON.stringify({ dia, mad })}`);
+});
+
+teste('personalWakeWindow: período sem amostras usa a média geral', () => {
+  limpar(); state.baby.birth = dias(150);
+  for (let d = 1; d <= 6; d += 1) {
+    addEvent({ type: 'sleep', at: hora(d, 8), endAt: hora(d, 9) });
+    addEvent({ type: 'sleep', at: hora(d, 9) + 100 * M, endAt: hora(d, 10, 30) });
+  }
+  const w = personalWakeWindow(Date.now(), 'noite');
+  assert.equal(w.escopo, 'geral');
+  assert.equal(w.personal, true);
+});
+
+teste('recentFeedIntervalMin: intervalos diferentes por período', () => {
+  limpar();
+  for (let d = 1; d <= 4; d += 1) {
+    // de dia a cada 120 min (8..16h); madrugada a cada 200 min (0:00, 3:20)
+    [8, 10, 12, 14, 16].forEach((h) => addEvent({ type: 'feed', at: hora(d, h), endAt: hora(d, h, 15) }));
+    addEvent({ type: 'feed', at: hora(d, 0), endAt: hora(d, 0, 15) });
+    addEvent({ type: 'feed', at: hora(d, 3, 20), endAt: hora(d, 3, 35) });
+    addEvent({ type: 'feed', at: hora(d, 6, 40), endAt: hora(d, 6, 55) });
+  }
+  const dia = recentFeedIntervalMin(Date.now(), 'dia');
+  const mad = recentFeedIntervalMin(Date.now(), 'madrugada');
+  assert.equal(dia, 120);
+  assert.equal(mad, 200);
 });
 
 if (falhas) { console.error(`\n${falhas} teste(s) falharam.`); process.exit(1); }
