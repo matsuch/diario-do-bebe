@@ -147,6 +147,18 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 /* soneca em curso: respira de leve para indicar que está acontecendo */
 .hero-sleep.is-live { animation: heroLive 3.4s ease-in-out infinite; }
 @keyframes heroLive { 0%, 100% { opacity: .88; } 50% { opacity: 1; } }
+/* Céu de fundo: estrelas que acendem e apagam, discretas e atrás de tudo. */
+.hero-stars { pointer-events: none; }
+.hero-star {
+  fill: #e9e6ff; opacity: .1;
+  transform-box: fill-box; transform-origin: center;
+  animation: heroTwinkle var(--d, 4s) ease-in-out var(--dl, 0s) infinite;
+}
+.hero-star.is-spark { fill: #fff; }
+@keyframes heroTwinkle {
+  0%, 100% { opacity: .06; transform: scale(.7); }
+  50% { opacity: .7; transform: scale(1.15); }
+}
 @keyframes heroFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes heroPop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
 @keyframes heroPulse {
@@ -155,7 +167,8 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-ring.is-enter, .hero-ring.is-enter .hero-sleep:not(.is-live), .hero-ring.is-enter .hero-mark,
-  .hero-sleep.is-live, .hero-now-pulse { animation: none; }
+  .hero-sleep.is-live, .hero-now-pulse, .hero-star { animation: none; }
+  .hero-star { opacity: .3; }
   .hero-now-g { transition: none; }
 }
 

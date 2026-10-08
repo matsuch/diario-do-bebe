@@ -414,6 +414,38 @@ const HERO = {
 };
 HERO.rLabel = HERO.R + HERO.rMarca + 8;
 
+/**
+ * Céu de fundo da órbita: estrelinhas que acendem e apagam. Posições fixas
+ * (gerador com semente), só onde NÃO atrapalham a leitura: dentro do anel,
+ * fora do bloco de texto central, e nos cantos além dos horários.
+ */
+function heroCeu() {
+  const g = svgEl('g', { class: 'hero-stars', 'aria-hidden': 'true' });
+  let seed = 20260507;
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const { cx, cy, R, faixaSono, rMarca } = HERO;
+  const rInterno = R - faixaSono / 2 - rMarca - 2;     // limite interno livre dos marcadores
+  const livre = (dx, dy) => {
+    const r = Math.hypot(dx, dy);
+    if (r < rInterno) return !(Math.abs(dx) < 72 && Math.abs(dy) < 30) && r > 18; // fora do texto
+    return Math.abs(dx) > 78 && Math.abs(dy) > 78 && r > 128;                      // cantos
+  };
+  let n = 0;
+  for (let guard = 0; n < 30 && guard < 600; guard += 1) {
+    const dx = (rnd() * 2 - 1) * 148; const dy = (rnd() * 2 - 1) * 148;
+    if (!livre(dx, dy)) continue;
+    const brilho = rnd() < 0.2;                          // algumas viram "faíscas" de 4 pontas
+    const tam = brilho ? 2.1 + rnd() * 1.1 : 0.5 + rnd() * 0.8;
+    const st = { class: `hero-star${brilho ? ' is-spark' : ''}`, style: `--d:${(2.6 + rnd() * 3.6).toFixed(2)}s;--dl:-${(rnd() * 6).toFixed(2)}s` };
+    const x = cx + dx; const y = cy + dy;
+    g.append(brilho
+      ? svgEl('path', { ...st, d: `M${x} ${y - tam}Q${x} ${y} ${x + tam} ${y}Q${x} ${y} ${x} ${y + tam}Q${x} ${y} ${x - tam} ${y}Q${x} ${y} ${x} ${y - tam}Z` })
+      : svgEl('circle', { ...st, cx: x, cy: y, r: tam }));
+    n += 1;
+  }
+  return g;
+}
+
 function svgEl(tag, attrs = {}) {
   const e = document.createElementNS(HERO_NS, tag);
   for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
@@ -519,6 +551,8 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
     + '<stop offset="0" style="stop-color:var(--sleep,#bab4ff);stop-opacity:1"/>'
     + '<stop offset="1" style="stop-color:var(--sleep,#bab4ff);stop-opacity:.9"/></linearGradient>';
   svg.append(defs);
+
+  svg.append(heroCeu()); // estrelinhas ao fundo (atrás da trilha e dos marcadores)
 
   // trilha das 24h: faixa espessa e contínua (a timeline em si)
   svg.append(svgEl('circle', { cx, cy, r: R, class: 'hero-track' }));
