@@ -500,13 +500,34 @@ export function lastWakeAt() {
  *
  * Apps como o Napper começam pela janela da idade e, conforme o bebê tem
  * registros, passam a usar o que ele realmente faz. Aqui: a mediana dos tempos
- * acordado (entre o fim de um sono e o início do próximo) das sonecas recentes
- * de dia, misturada com a janela da idade (peso cresce até 100% com 10 amostras)
- * e limitada a ±40% da faixa da idade, para um dia atípico não distorcer tudo.
+ * acordado (entre o fim de um sono e o início do próximo), misturada com a
+ * janela da idade (peso cresce até 100% com 10 amostras) e limitada a ±40% da
+ * faixa da idade, para um dia atípico não distorcer tudo.
+ *
+ * As médias são separadas por PERÍODO do dia, porque o bebê não se comporta
+ * igual o tempo todo (no histórico real: madrugada = acordado mais curto e
+ * sono mais longo; de dia e à noite a vigília é maior e mais irregular, e as
+ * mamadas da madrugada são as mais espaçadas). Sem amostras suficientes no
+ * período, usa a média de todos os períodos; sem isso, a janela da idade.
  */
 const PERSONAL_MIN_SAMPLES = 4;
 const PERSONAL_FULL_SAMPLES = 10;
-const PERSONAL_DAYS = 10;
+const PERSONAL_DAYS = 14;
+const FEED_DAYS = 7;
+const FEED_MIN_SAMPLES = 6;
+
+export const PERIODOS = {
+  dia:       { label: 'dia',       de: 6,  ate: 18 },
+  noite:     { label: 'noite',     de: 18, ate: 24 },
+  madrugada: { label: 'madrugada', de: 0,  ate: 6 },
+};
+
+/** Período do dia ('dia' 6–18h, 'noite' 18–24h, 'madrugada' 0–6h) de um instante. */
+export function periodoDe(ts) {
+  const h = new Date(ts).getHours();
+  if (h >= 6 && h < 18) return 'dia';
+  return h >= 18 ? 'noite' : 'madrugada';
+}
 
 function median(arr) {
   const s = [...arr].sort((a, b) => a - b);
@@ -514,8 +535,8 @@ function median(arr) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** Tempos acordado (min) que terminaram em soneca diurna nos últimos dias. */
-export function awakeGapsMin(ref = Date.now()) {
+/** Tempos acordado (min) antes de cada sono recente, com o período em que o sono começou. */
+export function awakeGaps(ref = Date.now()) {
   const desde = ref - PERSONAL_DAYS * 24 * MS_HOUR;
   const sonos = state.events
     .filter((e) => !e.deleted && e.type === 'sleep' && e.endAt && e.at >= desde - 24 * MS_HOUR)
@@ -524,26 +545,32 @@ export function awakeGapsMin(ref = Date.now()) {
   for (let i = 1; i < sonos.length; i += 1) {
     const ant = sonos[i - 1]; const cur = sonos[i];
     if (cur.at < desde) continue;
-    const h = new Date(cur.at).getHours();
     const gap = (cur.at - ant.endAt) / MS_MIN;
-    if (h < 6 || h >= 19) continue;          // só soneca de dia
-    if (gap < 20 || gap > 8 * 60) continue;  // descarta lixo e noite
-    gaps.push(gap);
+    if (gap < 20 || gap > 8 * 60) continue;  // descarta lixo e vigília de dia inteiro
+    gaps.push({ min: gap, periodo: periodoDe(cur.at) });
   }
   return gaps;
 }
 
-/** Janela de sono personalizada: { min, max, personal, n } (ou a da idade). */
-export function personalWakeWindow(ref = Date.now()) {
+/**
+ * Janela de sono personalizada para um período: { min, max, personal, n, periodo, escopo }.
+ * `escopo` diz de onde veio: 'periodo', 'geral' (todos os períodos) ou 'idade'.
+ */
+export function personalWakeWindow(ref = Date.now(), periodo = periodoDe(ref)) {
   const base = wakeWindow(ref);
-  const gaps = awakeGapsMin(ref);
-  if (gaps.length < PERSONAL_MIN_SAMPLES) return { ...base, personal: false, n: gaps.length };
+  const todos = awakeGaps(ref);
+  const doPeriodo = todos.filter((g) => g.periodo === periodo);
+  let amostras = null; let escopo = 'idade';
+  if (doPeriodo.length >= PERSONAL_MIN_SAMPLES) { amostras = doPeriodo; escopo = 'periodo'; }
+  else if (todos.length >= PERSONAL_MIN_SAMPLES) { amostras = todos; escopo = 'geral'; }
+  if (!amostras) return { ...base, personal: false, n: todos.length, periodo, escopo };
+  const gaps = amostras.map((g) => g.min);
   const peso = Math.min(1, gaps.length / PERSONAL_FULL_SAMPLES);
   const mid = (base.min + base.max) / 2;
   const alvo = Math.min(base.max * 1.4, Math.max(base.min * 0.6, median(gaps)));
   const centro = mid * (1 - peso) + alvo * peso;
   const meia = Math.max(10, (base.max - base.min) / 2 * 0.75); // faixa um pouco mais estreita
-  return { d: base.d, min: Math.round(centro - meia), max: Math.round(centro + meia), personal: true, n: gaps.length };
+  return { d: base.d, min: Math.round(centro - meia), max: Math.round(centro + meia), personal: true, n: gaps.length, periodo, escopo };
 }
 
 /** Próxima soneca sugerida: { wake, start, end, window } — ou null se dormindo/sem dados. */
@@ -551,31 +578,39 @@ export function nextNap(ref = Date.now()) {
   if (state.activeSleep) return null;
   const wake = lastWakeAt();
   if (!wake) return null;
-  const w = personalWakeWindow(ref);
+  // O período que vale é o de quando a soneca deve acontecer, não o de agora.
+  const base = wakeWindow(ref);
+  const periodo = periodoDe(wake + ((base.min + base.max) / 2) * MS_MIN);
+  const w = personalWakeWindow(ref, periodo);
   return { wake, start: wake + w.min * MS_MIN, end: wake + w.max * MS_MIN, window: w };
 }
 
-/** Intervalo médio recente entre mamadas (início a início), em min — ou null. */
-export function recentFeedIntervalMin(ref = Date.now()) {
-  const desde = ref - 3 * 24 * MS_HOUR;
+/**
+ * Intervalo médio recente entre mamadas (início a início), em min — ou null.
+ * Usa o período da mamada que abre o intervalo; sem amostras, todos os períodos.
+ */
+export function recentFeedIntervalMin(ref = Date.now(), periodo = periodoDe(ref)) {
+  const desde = ref - FEED_DAYS * 24 * MS_HOUR;
   const mam = state.events
     .filter((e) => !e.deleted && e.type === 'feed' && e.at >= desde)
     .sort((a, b) => a.at - b.at);
   const gaps = [];
   for (let i = 1; i < mam.length; i += 1) {
     const g = (mam[i].at - mam[i - 1].at) / MS_MIN;
-    if (g >= 30 && g <= 6 * 60) gaps.push(g);
+    if (g >= 30 && g <= 6 * 60) gaps.push({ min: g, periodo: periodoDe(mam[i - 1].at) });
   }
-  if (gaps.length < 6) return null;
+  const doPeriodo = gaps.filter((g) => g.periodo === periodo);
+  const usar = doPeriodo.length >= FEED_MIN_SAMPLES ? doPeriodo : gaps;
+  if (usar.length < FEED_MIN_SAMPLES) return null;
   const cfg = state.settings.feedIntervalMin;
-  return Math.round(Math.min(cfg * 1.5, Math.max(cfg * 0.5, median(gaps))));
+  return Math.round(Math.min(cfg * 1.5, Math.max(cfg * 0.5, median(usar.map((g) => g.min)))));
 }
 
-/** Próxima mamada prevista pelo padrão recente (só para a Home; lembretes seguem o intervalo configurado). */
+/** Próxima mamada prevista pelo padrão recente do período (só para a Home; lembretes seguem o intervalo configurado). */
 export function predictedFeedAt() {
   const ultima = lastEvent('feed');
   if (!ultima) return null;
-  const intervalo = recentFeedIntervalMin();
+  const intervalo = recentFeedIntervalMin(Date.now(), periodoDe(ultima.at));
   if (intervalo == null) return nextFeedAt(); // sem histórico: intervalo configurado
   return ultima.at + intervalo * MS_MIN;
 }

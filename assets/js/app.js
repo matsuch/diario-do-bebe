@@ -249,7 +249,7 @@ function cardJanelaSono() {
   let titulo; let sub; let quando; let estado = '';
   if (agora < nap.start) {
     titulo = 'Próxima soneca';
-    sub = `acordado há ${acordado} · janela ${w.min}–${w.max}min${w.personal ? ' (aprendida do seu bebê)' : ''}`;
+    sub = `acordado há ${acordado} · janela ${w.min}–${w.max}min${w.personal ? ` (padrão ${w.escopo === 'periodo' ? `da ${w.periodo}` : 'recente'})` : ''}`;
     quando = `~${fmtTime(nap.start)}`;
   } else if (agora < nap.end) {
     titulo = 'Hora da soneca 🌙';
@@ -670,10 +670,11 @@ function renderAgora() {
   if (soneca) cards.append(soneca);
   const mamadaPrevista = S.predictedFeedAt();
   if (mamadaPrevista && !state.activeFeed) {
-    const intervalo = S.recentFeedIntervalMin();
+    const ultimaMamada = S.lastEvent('feed');
+    const intervalo = S.recentFeedIntervalMin(Date.now(), S.periodoDe(ultimaMamada.at));
     cards.append(cartaoProximo({
       emoji: '🍼', titulo: 'Próxima mamada',
-      sub: intervalo ? `padrão recente: a cada ~${fmtMin(intervalo)}` : `intervalo configurado: ${fmtMin(state.settings.feedIntervalMin)}`,
+      sub: intervalo ? `padrão recente (${S.periodoDe(ultimaMamada.at)}): a cada ~${fmtMin(intervalo)}` : `intervalo configurado: ${fmtMin(state.settings.feedIntervalMin)}`,
       at: mamadaPrevista, onClick: iniciarMamada,
     }));
   }
