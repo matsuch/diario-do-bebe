@@ -71,22 +71,22 @@ try {
   checar((await page.locator('#medidaGrid .measure-val').allTextContents()).every((t) => t.trim() === '—'),
     'peso e altura deveriam estar vazios antes de qualquer medida');
 
-  // mamada cronometrada com troca de lado (a tela abre pela ação rápida "Mamada")
+  // mamada cronometrada com troca de lado (tudo na própria Home, sem trocar de tela)
   await page.click('.tab[data-view="agora"]');
   await page.click('.quick[data-quick="mamada"]');
-  await page.click('.side-btn[data-side="E"]');
+  checar(await page.locator('#view-agora').isVisible(), 'iniciar mamada não deveria sair da Home');
   await page.waitForTimeout(1100);
   await page.click('.side-btn[data-side="D"]');
   await page.waitForTimeout(600);
   await shot('mamada.png');
-  await page.click('#btnFeedFinish');
-  checar(await page.locator('#feedList .item').count() === 1, 'mamada cronometrada não entrou na lista');
+  await page.click('#nextCards button:has-text("Finalizar mamada")');
+  checar(await page.locator('#timeline .item', { hasText: 'Mamada' }).count() === 1, 'mamada cronometrada não entrou na lista');
 
   // mamada registrada à mão
   await page.click('#btnFeedManual');
   await page.fill('#sheetBody input[name="min"]', '18');
   await page.click('#sheetBody button[type="submit"]');
-  checar(await page.locator('#feedList .item').count() === 2, 'mamada manual não entrou na lista');
+  checar(await page.locator('#timeline .item', { hasText: 'Mamada' }).count() === 2, 'mamada manual não entrou na lista');
 
   // registros rápidos
   await page.click('.tab[data-view="agora"]');
@@ -118,7 +118,7 @@ try {
   const mamadasHoje = async () => Number((await page.textContent('#todayGrid .stat b')).trim());
   const mamadasAntes = await mamadasHoje();
   await page.click('.quick[data-quick="sono"]');   // sono em andamento
-  await page.click('.quick[data-quick="mamada"]'); // mamada em andamento (abre a aba Mamada)
+  await page.click('.quick[data-quick="mamada"]'); // mamada em andamento
   await page.click('.tab[data-view="agora"]');
   const emAndamento = page.locator('#timeline .item.is-live');
   const liveMamada = emAndamento.filter({ hasText: 'Mamada' });

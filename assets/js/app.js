@@ -16,7 +16,6 @@ const $$ = (sel) => [...document.querySelectorAll(sel)];
 
 const TITULOS = {
   agora: 'Início',
-  mamada: 'Mamada',
   remedios: 'Alertas',
   evolucao: 'Evolução',
   diario: 'Diário',
@@ -169,6 +168,58 @@ function cardSonoAtivo() {
     if (ev) toast(`Acordou · dormiu ${fmtMin((ev.endAt - ev.at) / MS_MIN)}`);
   });
   card.append(btn);
+  return card;
+}
+
+/** Começa uma mamada aqui mesmo na Home (lado sugerido; dá para trocar no card). */
+function iniciarMamada() {
+  if (!state.activeFeed) S.startFeed(S.nextSide() || 'E');
+  vibrar();
+  toast('Mamada iniciada — finalize quando terminar');
+}
+
+/** Card com o cronômetro da mamada (quando está mamando): trocar de lado, relactação, finalizar. */
+function cardMamadaAtiva() {
+  const f = state.activeFeed;
+  const total = Date.now() - f.startAt;
+  const minPorLado = {};
+  f.segments.forEach((s) => { minPorLado[s.side] = (minPorLado[s.side] || 0) + s.ms; });
+  minPorLado[f.side] = (minPorLado[f.side] || 0) + (Date.now() - f.segStart);
+
+  const card = el('div', 'card timer-card');
+  card.append(el('p', 'muted', juntar(`🍼 Mamando desde ${fmtTime(f.startAt)}`, `lado ${SIDE_LABEL[f.side]}`, autorAndamento(f))));
+  card.append(el('div', 'timer', `${pad(Math.floor(total / MS_MIN))}:${pad(Math.floor(total / 1000) % 60)}`));
+
+  const lados = el('div', 'side-row');
+  ['E', 'D'].forEach((side) => {
+    const b = el('button', `side-btn${f.side === side ? ' is-active' : ''}`);
+    b.type = 'button'; b.dataset.side = side;
+    const min = minPorLado[side] ? Math.round(minPorLado[side] / MS_MIN) : 0;
+    b.innerHTML = `${side === 'E' ? 'Esquerdo' : 'Direito'}<span class="side-min">${min} min</span>`;
+    b.addEventListener('click', () => { vibrar(); S.switchSide(side); });
+    lados.append(b);
+  });
+  card.append(lados);
+
+  const sw = el('label', 'switch');
+  const chk = el('input'); chk.type = 'checkbox'; chk.checked = !!f.relactation;
+  chk.addEventListener('change', () => S.setFeedRelactation(chk.checked));
+  sw.append(el('span', null, 'Relactação'), chk);
+  card.append(sw);
+
+  const linha = el('div', 'row-2');
+  const fim = el('button', 'btn btn-primary', 'Finalizar mamada');
+  fim.addEventListener('click', () => {
+    const ev = S.finishFeed();
+    vibrar();
+    if (ev) toast(`Mamada de ${fmtMin(ev.durationMin)} registrada`);
+  });
+  const cancelar = el('button', 'btn btn-ghost', 'Cancelar');
+  cancelar.addEventListener('click', () => {
+    if (confirm('Cancelar esta mamada sem registrar?')) S.cancelFeed();
+  });
+  linha.append(fim, cancelar);
+  card.append(linha);
   return card;
 }
 
@@ -623,17 +674,10 @@ function renderAgora() {
     cards.append(cartaoProximo({
       emoji: '🍼', titulo: 'Próxima mamada',
       sub: intervalo ? `padrão recente: a cada ~${fmtMin(intervalo)}` : `intervalo configurado: ${fmtMin(state.settings.feedIntervalMin)}`,
-      at: mamadaPrevista, onClick: () => irPara('mamada'),
+      at: mamadaPrevista, onClick: iniciarMamada,
     }));
   }
-  if (state.activeFeed) {
-    cards.append(cartaoProximo({
-      emoji: '🍼', titulo: 'Mamando agora',
-      sub: juntar(`Lado ${SIDE_LABEL[state.activeFeed.side]}`, `desde ${fmtTime(state.activeFeed.startAt)}`,
-        autorAndamento(state.activeFeed)),
-      at: Date.now(), onClick: () => irPara('mamada'),
-    }));
-  }
+  if (state.activeFeed) cards.append(cardMamadaAtiva());
 
   // — próximos alertas (remédios, consultas…) —
   state.meds
@@ -840,68 +884,6 @@ function linhaEvento(ev, { apagavel = true } = {}) {
 }
 
 /* ================================================================ MAMADA */
-
-let tinhaMamadaAtiva = false;
-
-function renderMamada() {
-  const ativa = state.activeFeed;
-  const timer = $('#feedTimer');
-  const hint = $('#feedHint');
-
-  if (ativa) {
-    const total = Date.now() - ativa.startAt;
-    timer.textContent = `${pad(Math.floor(total / MS_MIN))}:${pad(Math.floor(total / 1000) % 60)}`;
-    hint.textContent = `Começou às ${fmtTime(ativa.startAt)} · lado ${SIDE_LABEL[ativa.side]}`;
-  } else {
-    timer.textContent = '00:00';
-    const proxima = S.nextFeedAt();
-    const lado = S.nextSide();
-    hint.textContent = proxima
-      ? `Próxima ${fmtTime(proxima)} (${countdown(proxima).label})${lado ? ` · comece pelo ${SIDE_LABEL[lado]}` : ''}`
-      : 'Toque em um lado para começar a contar';
-  }
-
-  const minutosPorLado = {};
-  if (ativa) {
-    ativa.segments.forEach((s) => { minutosPorLado[s.side] = (minutosPorLado[s.side] || 0) + s.ms; });
-    minutosPorLado[ativa.side] = (minutosPorLado[ativa.side] || 0) + (Date.now() - ativa.segStart);
-  }
-  const sugerido = ativa ? null : S.nextSide();
-
-  $$('.side-btn').forEach((btn) => {
-    const side = btn.dataset.side;
-    const ativo = ativa ? ativa.side === side : sugerido === side;
-    btn.classList.toggle('is-active', ativo);
-    const min = minutosPorLado[side] ? Math.round(minutosPorLado[side] / MS_MIN) : 0;
-    btn.innerHTML = `${side === 'E' ? 'Esquerdo' : 'Direito'}<span class="side-min">${
-      ativa ? `${min} min` : (sugerido === side ? 'sugerido' : '')}</span>`;
-  });
-
-  // Sem cronômetro rodando, o switch vale para a próxima mamada iniciada;
-  // quando uma mamada termina (aqui ou no outro celular), ele volta a desligado.
-  const relact = $('#feedRelact');
-  if (ativa) relact.checked = !!ativa.relactation;
-  else if (tinhaMamadaAtiva) relact.checked = false;
-  tinhaMamadaAtiva = !!ativa;
-
-  $('#btnFeedFinish').hidden = !ativa;
-  $('#btnFeedCancel').hidden = !ativa;
-  $('#btnFeedManual').hidden = !!ativa;
-
-  const foco = $('#feedFocus');
-  foco.innerHTML = '';
-  const ultima = S.lastEvent('feed');
-  const prox = S.nextFeedAt();
-  foco.append(focusChip('🍼', 'lamp', 'Última mamada', ultima ? fmtTime(ultima.at) : '—'));
-  foco.append(focusChip('⏰', 'sleep', 'Próxima', prox ? fmtTime(prox) : '—'));
-
-  const lista = $('#feedList');
-  lista.innerHTML = '';
-  const doDia = S.daySummary().eventos.filter((e) => e.type === 'feed');
-  const feeds = [...doDia.filter((e) => e.ongoing), ...doDia.filter((e) => !e.ongoing).reverse()];
-  if (!feeds.length) lista.append(el('p', 'empty', 'Nenhuma mamada registrada hoje.'));
-  feeds.forEach((ev) => lista.append(linhaEvento(ev)));
-}
 
 /** Que opção de lado mostrar no editor de uma mamada já salva. */
 function ladoDaMamada(ev) {
@@ -2106,7 +2088,6 @@ function render() {
   $('#topSub').textContent = [nome, idade].filter(Boolean).join(' · ') || 'Toque em Ajustes para dar um nome 💛';
 
   if (viewAtual === 'agora') renderAgora();
-  else if (viewAtual === 'mamada') renderMamada();
   else if (viewAtual === 'remedios') renderRemedios();
   else if (viewAtual === 'diario') renderDiario();
   else if (viewAtual === 'evolucao') renderEvolucao();
@@ -2130,7 +2111,7 @@ function checarMetaArroto() {
 }
 
 function tick() {
-  if (viewAtual === 'agora' || viewAtual === 'mamada' || viewAtual === 'remedios') render();
+  if (viewAtual === 'agora' || viewAtual === 'remedios') render();
   checarAvisos();
   checarMetaArroto();
   sincronizarWorker();
@@ -2353,9 +2334,7 @@ function ligarEventos() {
     vibrar();
     const acao = btn.dataset.quick;
     if (acao === 'mamada') {
-      if (!state.activeFeed) S.startFeed(S.nextSide() || 'E');
-      irPara('mamada');
-      toast('Mamada iniciada — finalize quando terminar');
+      iniciarMamada();
     } else if (acao === 'xixi' || acao === 'cocô') {
       S.addEvent({ type: 'diaper', kind: acao });
       toast(`${acao === 'xixi' ? 'Xixi' : 'Cocô'} registrado`);
@@ -2374,30 +2353,6 @@ function ligarEventos() {
       toast(fim ? `Acordou · dormiu ${fmtMin((fim.endAt - fim.at) / MS_MIN)}` : 'Sono iniciado');
     }
   }));
-
-  $$('.side-btn').forEach((btn) => btn.addEventListener('click', () => {
-    vibrar();
-    const side = btn.dataset.side;
-    if (state.activeFeed) S.switchSide(side);
-    else {
-      S.startFeed(side);
-      if ($('#feedRelact').checked) S.setFeedRelactation(true);
-    }
-  }));
-
-  $('#feedRelact').addEventListener('change', (e) => {
-    if (state.activeFeed) S.setFeedRelactation(e.target.checked);
-  });
-
-  $('#btnFeedFinish').addEventListener('click', () => {
-    const ev = S.finishFeed();
-    vibrar();
-    if (ev) toast(`Mamada de ${fmtMin(ev.durationMin)} registrada`);
-  });
-
-  $('#btnFeedCancel').addEventListener('click', () => {
-    if (confirm('Cancelar esta mamada sem registrar?')) S.cancelFeed();
-  });
 
   $('#btnFeedManual').addEventListener('click', () => sheetMamada());
   $('#btnSleepManual').addEventListener('click', () => sheetSono());
