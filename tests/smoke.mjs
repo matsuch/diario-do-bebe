@@ -204,10 +204,18 @@ try {
   await shot('agenda.png');
   await page.click('#sheetClose');
   checar(await page.locator('#timeline .item').count() >= 6, 'linha do tempo do dia veio incompleta');
-  // Em "hoje" a órbita do herói já mostra o dia; o relógio só entra ao voltar no tempo.
-  checar(await page.locator('#dayClock').isHidden(), 'relógio do dia deveria ficar oculto em "hoje"');
+  // Os totais ficam logo abaixo do seletor de dia e acompanham o dia escolhido; sem gráfico extra.
+  const totalHoje = (await page.locator('#todayGrid .stat').allTextContents()).join('|');
+  const ordem = await page.evaluate(() => {
+    const nav = document.querySelector('.day-nav'); const grid = document.querySelector('#todayGrid');
+    return !!(nav.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  checar(ordem, 'o seletor de dia deveria ficar acima dos totais');
   await page.click('#dayPrev');
-  checar(!(await page.locator('#dayClock').isHidden()), 'relógio do dia não apareceu ao voltar um dia');
+  checar((await page.locator('#dayLabel').textContent()).trim() === 'Ontem', 'seletor não mostrou "Ontem"');
+  const totalOntem = (await page.locator('#todayGrid .stat').allTextContents()).join('|');
+  checar(totalOntem !== totalHoje && totalOntem.startsWith("0🍼"), `totais não acompanharam o dia anterior (${totalOntem})`);
+  checar(await page.locator('.clock-wrap, #dayClock, .clock').count() === 0, 'o gráfico do dia anterior não deveria existir');
   await page.click('#dayNext');
   await shot('agora.png');
 

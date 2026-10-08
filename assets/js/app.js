@@ -300,73 +300,6 @@ function renderSleepBar(container, ref = new Date()) {
   container.append(card);
 }
 
-/** Relógio do dia (24h): sono como arcos, mamadas como marcas. */
-function renderRelogioDia(container, ref = new Date()) {
-  container.innerHTML = '';
-  const [inicio] = S.dayBounds(ref);
-  const eventos = S.daySummary(ref).eventos;
-  const cx = 100;
-  const cy = 100;
-  const r = 74;
-  const NS = 'http://www.w3.org/2000/svg';
-
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 200 200');
-  svg.setAttribute('class', 'clock');
-
-  const ang = (t) => ((t - inicio) / (24 * MS_HOUR)) * 360 - 90;
-  const ponto = (raio, deg) => {
-    const a = (deg * Math.PI) / 180;
-    return [cx + raio * Math.cos(a), cy + raio * Math.sin(a)];
-  };
-  const add = (tag, attrs) => {
-    const e = document.createElementNS(NS, tag);
-    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
-    svg.append(e);
-    return e;
-  };
-
-  add('circle', { cx, cy, r, class: 'clock-track' });
-  // marcas de hora (0/6/12/18)
-  [0, 6, 12, 18].forEach((h) => {
-    const [x1, y1] = ponto(r - 6, h * 15 - 90);
-    const [x2, y2] = ponto(r + 6, h * 15 - 90);
-    add('line', { x1, y1, x2, y2, class: 'clock-tick' });
-    const [tx, ty] = ponto(r + 15, h * 15 - 90);
-    const t = add('text', { x: tx, y: ty, class: 'clock-h' });
-    t.textContent = `${h}h`;
-  });
-
-  // arcos de sono (segmentos já recortados no dia; inclui sono vindo da véspera)
-  S.sleepSegmentsInDay(ref).forEach((seg) => {
-    const a1 = ang(seg.at);
-    const a2 = ang(seg.endAt);
-    if (a2 - a1 < 0.5) return;
-    const [x1, y1] = ponto(r, a1);
-    const [x2, y2] = ponto(r, a2);
-    const grande = a2 - a1 > 180 ? 1 : 0;
-    add('path', { d: `M ${x1} ${y1} A ${r} ${r} 0 ${grande} 1 ${x2} ${y2}`, class: 'clock-sleep' });
-  });
-
-  // mamadas como pontinhos
-  eventos.filter((e) => e.type === 'feed').forEach((e) => {
-    const [x, y] = ponto(r, ang(e.at));
-    add('circle', { cx: x, cy: y, r: 3.2, class: 'clock-feed' });
-  });
-
-  // centro: total de sono do dia
-  const totalMin = S.daySummary(ref).minutosDormindo;
-  const centro = add('text', { x: cx, y: cy - 4, class: 'clock-total' });
-  centro.textContent = fmtMin(totalMin);
-  const rot = add('text', { x: cx, y: cy + 14, class: 'clock-label' });
-  rot.textContent = 'de sono';
-
-  container.append(svg);
-  const legenda = el('div', 'clock-legend');
-  legenda.innerHTML = '<span><i class="dot sleep"></i>sono</span><span><i class="dot feed"></i>mamada</span>';
-  container.append(legenda);
-}
-
 /** O evento em destaque no centro do herói: o próximo mais relevante. */
 function heroFoco() {
   if (state.activeFeed) return { label: 'Mamando agora', big: `desde ${fmtTime(state.activeFeed.startAt)}`, tone: 'lamp' };
@@ -731,13 +664,10 @@ function renderAgora() {
   $('#quickSonoLabel').textContent = state.activeSleep ? 'Acordou' : 'Dormiu';
   $('#quickArrotoLabel').textContent = state.activeBurp ? 'Encerrar' : 'Arroto';
 
-  renderResumo($('#todayGrid'), S.daySummary());
-  renderSleepBar($('#sleepBar'));
-
   renderRegistros();
 }
 
-/** Bloco "Registros" da Home: navegação por dia, órbita do dia e linha do tempo. */
+/** Bloco "Registros" da Home: navegação por dia, totais do dia escolhido e linha do tempo. */
 function renderRegistros() {
   const ref = refDia();
   $('#dayLabel').textContent = diaDiario === 0 ? 'Hoje'
@@ -745,10 +675,9 @@ function renderRegistros() {
     : ref.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
   $('#dayNext').disabled = diaDiario >= 0;
 
-  // A órbita de hoje já é o herói no topo; só desenha o relógio ao voltar no tempo.
-  const relogio = $('#dayClock');
-  relogio.hidden = diaDiario === 0;
-  if (!relogio.hidden) renderRelogioDia(relogio, ref);
+  // Os totais e a barra de sono acompanham o dia escolhido (hoje, ontem…).
+  renderResumo($('#todayGrid'), S.daySummary(ref));
+  renderSleepBar($('#sleepBar'), ref);
 
   const linha = $('#timeline');
   linha.innerHTML = '';

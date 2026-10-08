@@ -68,7 +68,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 
 /* números sempre alinhados (timers, contagens, horários) */
 .timer, .next-when, .stat b, .item-time, .med-when, .sleepbar-top strong,
-.agenda-line b, .clock-total { font-variant-numeric: tabular-nums; }
+.agenda-line b { font-variant-numeric: tabular-nums; }
 
 /* ---------- topo ---------- */
 .topbar {
@@ -319,19 +319,6 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .sleepbar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8b83e6, var(--sleep)); transition: width .5s cubic-bezier(.4,0,.2,1); }
 .sleepbar-fill.is-done { background: linear-gradient(90deg, #5fc8a0, var(--diaper)); }
 
-.clock-wrap { display: flex; justify-content: center; }
-.clock { width: 240px; max-width: 80%; height: auto; }
-.clock-track { fill: none; stroke: var(--surface-2); stroke-width: 12; }
-.clock-sleep { fill: none; stroke: var(--sleep); stroke-width: 12; stroke-linecap: round; }
-.clock-feed { fill: var(--accent); }
-.clock-tick { stroke: var(--line); stroke-width: 2; }
-.clock-h { fill: var(--muted); font-size: 9px; text-anchor: middle; dominant-baseline: middle; font-weight: 700; }
-.clock-total { fill: var(--text); font-size: 23px; font-weight: 800; text-anchor: middle; }
-.clock-label { fill: var(--muted); font-size: 10px; text-anchor: middle; font-weight: 600; }
-.clock-legend { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 4px; }
-.clock-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-.clock-legend .dot.sleep { background: var(--sleep); }
-.clock-legend .dot.feed { background: var(--accent); }
 
 /* navegação de dia (Diário) */
 .day-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
