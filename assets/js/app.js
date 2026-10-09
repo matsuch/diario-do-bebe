@@ -2403,7 +2403,22 @@ setInterval(tick, 1000);
 SYNC.start();
 
 if ('serviceWorker' in navigator) {
+  // Quando sai uma versão nova, o HTML vem da rede mas JS/CSS ainda vêm do
+  // cache antigo até o service worker novo assumir — a tela fica misturada
+  // (ex.: Evolução sem as abas). Assim que o novo assume, recarrega uma vez.
+  const tinhaVersao = !!navigator.serviceWorker.controller;
+  let recarregando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!tinhaVersao || recarregando) return;
+    recarregando = true;
+    window.location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW falhou:', err));
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      // App instalado quase nunca é "aberto de novo": confere versão ao voltar ao primeiro plano.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch((err) => console.warn('SW falhou:', err));
   });
 }
