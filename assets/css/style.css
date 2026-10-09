@@ -282,6 +282,16 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .btn-danger { background: transparent; color: var(--danger); border-color: color-mix(in oklab, var(--danger) 40%, var(--line)); }
 .btn.block { display: block; width: 100%; margin-top: var(--sp-tight); }
 
+/* ---------- Evolução: sub-abas Guia / Registros ---------- */
+.subtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--surface-2); border-radius: 16px; }
+.subtab {
+  appearance: none; border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 700;
+  min-height: 44px; border-radius: 12px; cursor: pointer; transition: background .2s, color .2s;
+}
+.subtab.is-active { background: var(--accent); color: var(--accent-ink); }
+#view-evolucao[data-sub="guia"] > .evo-registro,
+#view-evolucao[data-sub="registro"] > [data-guia] { display: none; }
+
 /* ---------- registrar rápido (tiles uniformes com chip glossy) ---------- */
 .quick-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .quick {

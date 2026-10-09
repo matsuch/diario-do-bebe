@@ -88,11 +88,19 @@
          tela. Sem div de embrulho de propósito: só filho direto herda o ritmo
          vertical (--sp-tight / --sp-block / --sp-section) que vale em todas as
          abas — dentro de um wrapper os blocos ficariam colados. -->
-    <h2 class="section-title" id="guiaAncora">Crescimento</h2>
-    <div class="measure-grid" id="medidaGrid"></div>
-    <button class="btn btn-ghost block" id="btnMedida" type="button">Registrar peso e altura</button>
-    <div id="evolucaoRotina"></div>
-    <p class="muted small center" id="evolucaoNota"></p>
+    <!-- Duas abas: "Guia" (padrão, o texto explicativo da fase) e "Registros"
+         (peso/altura e a rotina). A tela alterna pelo data-sub; os blocos do
+         guia (data-guia) e os de registro (.evo-registro) seguem como filhos
+         diretos para manter o ritmo vertical. -->
+    <div class="subtabs" role="tablist" aria-label="Evolução">
+      <button class="subtab is-active" id="evoTabGuia" data-evo="guia" role="tab" aria-selected="true" type="button">Guia</button>
+      <button class="subtab" id="evoTabRegistros" data-evo="registro" role="tab" aria-selected="false" type="button">Registros</button>
+    </div>
+    <h2 class="section-title evo-registro" id="guiaAncora">Crescimento</h2>
+    <div class="measure-grid evo-registro" id="medidaGrid"></div>
+    <button class="btn btn-ghost block evo-registro" id="btnMedida" type="button">Registrar peso e altura</button>
+    <div class="evo-registro" id="evolucaoRotina"></div>
+    <p class="muted small center evo-registro" id="evolucaoNota"></p>
   </section>
 
   <!-- ============ AJUSTES ============ -->
