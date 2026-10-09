@@ -25,6 +25,7 @@ const TITULOS = {
 const BURP_TARGET_MIN = 20; // meta do cronômetro de arroto
 
 let viewAtual = 'agora';
+let evoAba = 'guia'; // sub-aba da Evolução: 'guia' (padrão) ou 'registro'
 let diaDiario = 0; // 0 = hoje, -1 = ontem...
 let burpAvisado = false; // já avisou que a meta de arroto foi atingida?
 
@@ -93,6 +94,8 @@ async function copiar(texto) {
 /* ================================================================ navegação */
 
 function irPara(view) {
+  // A Evolução sempre abre no Guia (o texto explicativo); os registros ficam na outra aba.
+  if (view === 'evolucao' && viewAtual !== 'evolucao') evoAba = 'guia';
   viewAtual = view;
   $$('.view').forEach((v) => { v.hidden = v.id !== `view-${view}`; });
   $$('.tab').forEach((t) => t.classList.toggle('is-active', t.dataset.view === view));
@@ -1697,6 +1700,13 @@ const FAIXA_TEXTO = {
 const num = (v, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 
 function renderEvolucao() {
+  $('#view-evolucao').dataset.sub = evoAba;
+  $$('.subtab').forEach((b) => {
+    const ativa = b.dataset.evo === evoAba;
+    b.classList.toggle('is-active', ativa);
+    b.setAttribute('aria-selected', String(ativa));
+  });
+
   const { sex, birth } = state.baby;
   const grid = $('#medidaGrid');
   grid.innerHTML = '';
@@ -2293,6 +2303,13 @@ function ligarEventosWhatsApp() {
 function ligarEventos() {
   $$('.tab').forEach((tab) => tab.addEventListener('click', () => { vibrar(); irPara(tab.dataset.view); }));
   $('#btnAjustes').addEventListener('click', () => { vibrar(); irPara('ajustes'); });
+  $$('.subtab').forEach((b) => b.addEventListener('click', () => {
+    if (evoAba === b.dataset.evo) return;
+    vibrar();
+    evoAba = b.dataset.evo;
+    window.scrollTo({ top: 0 });
+    render();
+  }));
 
   $$('.quick').forEach((btn) => btn.addEventListener('click', () => {
     vibrar();

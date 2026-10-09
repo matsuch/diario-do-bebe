@@ -229,6 +229,12 @@ try {
   await page.click('.tab[data-view="evolucao"]');
   checar(!(await page.textContent('#evolucaoNota')).includes('Informe'),
     'Evolução ainda pedia dados depois de nascimento e sexo preenchidos');
+  // Evolução abre no Guia (explicativo); peso e altura ficam na aba Registros.
+  checar(await page.locator('#view-evolucao > .guia-hero').isVisible(), 'Evolução deveria abrir no Guia');
+  checar(!(await page.locator('#btnMedida').isVisible()), 'o registro de peso deveria ficar fora do Guia');
+  await page.click('.subtab[data-evo="registro"]');
+  checar(await page.locator('#btnMedida').isVisible(), 'a aba Registros não mostrou o registro de peso');
+  checar(!(await page.locator('#view-evolucao > .guia-hero').isVisible()), 'o Guia deveria sumir na aba Registros');
   await page.click('#btnMedida');
   await page.fill('#sheetBody input[name="peso"]', '4.35');
   await page.fill('#sheetBody input[name="altura"]', '55.2');
@@ -240,6 +246,11 @@ try {
     '4,35kg e 55,2cm aos 43 dias caem dentro da faixa da OMS e deveriam vir como esperado');
   checar((await page.locator('#medidaGrid .measure-val').allTextContents()).some((t) => t.includes('4,35')),
     'card de peso não mostrou o valor registrado');
+
+  // Voltar para a Evolução reabre no Guia.
+  await page.click('.tab[data-view="agora"]');
+  await page.click('.tab[data-view="evolucao"]');
+  checar(await page.locator('#view-evolucao > .guia-hero').isVisible(), 'Evolução não voltou a abrir no Guia');
 
   // O guia da fase tem que entrar como FILHO DIRETO da tela. Dentro de uma div
   // de embrulho ele perderia o ritmo vertical do app (que só alcança filho
@@ -258,7 +269,7 @@ try {
   const foraDaEscala = [...new Set(ritmoEvo)].filter((m) => !['10px', '16px', '26px'].includes(m));
   checar(foraDaEscala.length === 0,
     `Evolução usa espaçamento fora da escala do app: ${foraDaEscala.join(', ')}`);
-  checar(ritmoEvo.length > 8, `Evolução deveria ter o guia + o crescimento na tela (veio ${ritmoEvo.length})`);
+  checar(ritmoEvo.length > 6, `Evolução deveria ter o guia na tela (veio ${ritmoEvo.length})`);
 
   await shot('evolucao.png');
 
