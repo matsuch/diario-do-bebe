@@ -675,3 +675,80 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Evolução: ilustração, progresso da fase, medidores ---------- */
+.guia-hero-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-tight); }
+.guia-hero-txt { min-width: 0; }
+.guia-ilustra { flex: none; margin: -6px -4px -6px 0; }
+.guia-ilustra svg { display: block; }
+.il-halo { fill: color-mix(in oklab, var(--sleep) 12%, transparent); }
+.il-lua { fill: color-mix(in oklab, var(--sleep) 70%, var(--surface)); }
+.il-rosto { fill: #ffd9b8; }
+.il-cabelo { fill: none; stroke: #c98f63; stroke-width: 2.2; stroke-linecap: round; }
+.il-olho, .il-boca { fill: none; stroke: #7a4e35; stroke-width: 1.6; stroke-linecap: round; }
+.il-bochecha { fill: #ff9fb0; opacity: .55; }
+.il-manta { fill: color-mix(in oklab, var(--accent) 80%, var(--surface)); }
+.il-estrela { fill: var(--accent); }
+.il-ponto { fill: var(--text); opacity: .55; }
+.il-z { fill: var(--text); opacity: .6; font-size: 9px; font-weight: 800; }
+.il-z2 { font-size: 7px; opacity: .45; }
+
+.guia-progresso {
+  position: relative; height: 6px; margin-top: var(--sp-tight);
+  background: var(--surface-2); border-radius: 999px; overflow: hidden;
+}
+.guia-progresso-fill {
+  position: absolute; inset: 0 auto 0 0; border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 70%, var(--surface-2)), var(--accent));
+}
+
+/* salto: texto longo recolhido atrás de um "ver mais" */
+.guia-mais { margin-top: var(--sp-tight); }
+.guia-mais > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  cursor: pointer; list-style: none; color: var(--sleep); font-size: 13px; font-weight: 800;
+  min-height: 32px;
+}
+.guia-mais > summary::-webkit-details-marker { display: none; }
+.guia-mais[open] > summary .guia-seta { transform: rotate(-90deg); }
+
+/* sinais de atendimento no mesmo dia: caixa própria, antes do resto */
+.guia-urgente {
+  margin-top: var(--sp-tight); padding: var(--sp-tight) 12px;
+  border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--danger) 9%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--danger) 30%, var(--line-soft));
+}
+.guia-urgente .guia-sub { margin-top: 0; }
+
+/* medidor da faixa da OMS no card de peso/altura */
+.faixa { width: 100%; margin-top: 8px; }
+.faixa-trilha { position: relative; height: 8px; border-radius: 999px; background: var(--surface-2); }
+.faixa-zona {
+  position: absolute; top: 0; bottom: 0; border-radius: 999px;
+  background: color-mix(in oklab, var(--diaper) 38%, var(--surface-2));
+}
+.faixa-ponto {
+  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: var(--diaper);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.faixa-ponto.is-atencao { background: var(--accent); }
+.faixa-ponto.is-alerta { background: var(--danger); }
+.faixa-eixo {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  color: var(--muted); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+/* barrinha da rotina: média do dia vs. meta da idade */
+.evo-barra {
+  position: relative; height: 6px; margin: -2px 0 10px; border-radius: 999px; background: var(--surface-2);
+}
+/* faixa da meta: de "mínimo" até o fim (ou até o máximo, quando existe) */
+.evo-meta {
+  position: absolute; top: 0; bottom: 0; border-radius: 999px;
+  background: color-mix(in oklab, var(--diaper) 22%, var(--surface-2));
+}
+.evo-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; }
+.evo-fill.is-esperado { background: var(--diaper); }
+.evo-fill.is-atencao { background: var(--accent); }
