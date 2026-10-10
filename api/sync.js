@@ -72,14 +72,25 @@ const db = {
       limit 3000`;
     return r.map((row) => ({ id: row.id, data: row.data, deleted: row.deleted, updatedMs: Number(row.u) }));
   },
+  // Uma consulta só para o lote inteiro: gravar um por um estourava os 10 s da
+  // Vercel quando um celular religava o sync e reenviava tudo (erro 504).
+  // A cópia mais velha (por `updatedAt`) não sobrescreve a gravada — mesma regra
+  // de `eventoVelho` em lib/sync-core.mjs —, mas o updated_at anda mesmo assim,
+  // para quem enviou puxar de volta a versão que ficou.
   async upsertEvents(key, events) {
-    for (const e of events) {
-      await sql`
-        insert into events (family_key, id, data, deleted, updated_at)
-        values (${key}, ${e.id}, ${JSON.stringify(e.data)}::jsonb, ${e.deleted}, now())
-        on conflict (family_key, id)
-        do update set data = excluded.data, deleted = excluded.deleted, updated_at = now()`;
-    }
+    if (!events.length) return;
+    const linhas = JSON.stringify(events.map((e) => ({ id: e.id, data: e.data, deleted: e.deleted })));
+    await sql`
+      insert into events (family_key, id, data, deleted, updated_at)
+      select ${key}, x.id, x.data, x.deleted, now()
+      from jsonb_to_recordset(${linhas}::jsonb) as x(id text, data jsonb, deleted boolean)
+      on conflict (family_key, id)
+      do update set
+        data = case when coalesce((excluded.data->>'updatedAt')::float8, 0) < coalesce((events.data->>'updatedAt')::float8, 0)
+                    then events.data else excluded.data end,
+        deleted = case when coalesce((excluded.data->>'updatedAt')::float8, 0) < coalesce((events.data->>'updatedAt')::float8, 0)
+                       then events.deleted else excluded.deleted end,
+        updated_at = now()`;
   },
   async getProfile(key) {
     const r = await sql`
