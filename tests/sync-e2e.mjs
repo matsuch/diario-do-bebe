@@ -12,7 +12,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applySync } from '../lib/sync-core.mjs';
+import { applySync, eventoVelho } from '../lib/sync-core.mjs';
 
 const RAIZ = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PORTA = 8793;
@@ -22,7 +22,7 @@ function fakeDb() {
   let clock = 0; const ev = new Map(); const pf = new Map(); const at = new Map();
   return {
     async now() { return clock; },
-    async upsertEvents(k, evs) { const m = ev.get(k) || new Map(); ev.set(k, m); for (const e of evs) { clock += 1; m.set(e.id, { ...e, updatedMs: clock }); } },
+    async upsertEvents(k, evs) { const m = ev.get(k) || new Map(); ev.set(k, m); clock += 1; for (const e of evs) { const atual = m.get(e.id); m.set(e.id, { ...(atual && eventoVelho(e.data, atual.data) ? atual : e), updatedMs: clock }); } },
     async getEventsSince(k, s) { const m = ev.get(k) || new Map(); return [...m.values()].filter((e) => e.updatedMs > s).sort((a, b) => a.updatedMs - b.updatedMs); },
     async getProfile(k) { return pf.get(k) || null; },
     async upsertProfile(k, d) { clock += 1; pf.set(k, { data: d, updatedMs: clock }); },

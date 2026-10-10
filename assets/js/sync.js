@@ -162,12 +162,18 @@ export function sugerirCodigo() {
   return `${parte()}-${parte()}-${parte()}`;
 }
 
-/** Liga o sync com um código; marca tudo como pendente para o 1º envio. */
+/**
+ * Liga o sync com um código; marca os eventos como pendentes para o 1º envio
+ * (o servidor só aceita a cópia se ela não for mais velha que a dele).
+ * O perfil NÃO vai junto: quem entra (ou religa) adota o perfil da família,
+ * senão os ajustes/remédios velhos deste celular apagariam os do outro.
+ * Se a família ainda não tem perfil, o deste celular sobe no ciclo seguinte.
+ */
 export function enable(codigo) {
   bk.enabled = true;
   bk.familyCode = String(codigo || '').trim();
   bk.since = 0;
-  bk.profileHash = '';
+  bk.profileHash = hashObj(profileData());
   bk.activeHash = {}; // desconhecido: empurra só o que estiver rodando aqui
   state.events.forEach((e) => { e._dirty = true; });
   salvarBk();
@@ -236,6 +242,7 @@ export async function syncOnce() {
     // "sincronizado". Se o usuário editou no meio do voo, o hash local fica
     // diferente e a edição é empurrada no próximo ciclo (em vez de se perder).
     if (perfilMudou) bk.profileHash = perfilHashEnviado;
+    else if (!data.profile) bk.profileHash = ''; // família sem perfil ainda: o nosso sobe no próximo ciclo
     if (data.profile && data.profile.data) {
       const localHash = hashObj(profileData());
       const localPendente = localHash !== bk.profileHash;

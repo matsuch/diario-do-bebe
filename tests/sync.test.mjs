@@ -6,7 +6,7 @@
  *   node tests/sync.test.mjs
  */
 import assert from 'node:assert';
-import { applySync, sanitizeEvent, sanitizeActive } from '../lib/sync-core.mjs';
+import { applySync, sanitizeEvent, sanitizeActive, eventoVelho } from '../lib/sync-core.mjs';
 import {
   mergeIncoming, collectDirty, hashObj, collectActive, ativoPendente,
   intervaloAtual, INTERVALO, atrasoDoPush, ATRASO_PUSH,
@@ -30,7 +30,12 @@ function fakeDb() {
     async now() { return clock; },
     async upsertEvents(key, evs) {
       const m = eventos.get(key) || new Map(); eventos.set(key, m);
-      for (const e of evs) { clock += 1; m.set(e.id, { id: e.id, data: e.data, deleted: e.deleted, updatedMs: clock }); }
+      clock += 1; // um lote = uma escrita, como no Neon
+      for (const e of evs) {
+        const atual = m.get(e.id);
+        const fica = atual && eventoVelho(e.data, atual.data) ? atual : e;
+        m.set(e.id, { id: e.id, data: fica.data, deleted: fica.deleted, updatedMs: clock });
+      }
     },
     async getEventsSince(key, since) {
       const m = eventos.get(key) || new Map();
@@ -169,6 +174,41 @@ await teste('banco antigo (sem as funções de andamento) não quebra o sync', a
   assert.deepEqual(r.active, []);
 });
 
+await teste('religar com cópia velha não desfaz a edição nem a exclusão mais nova', async () => {
+  const db = fakeDb();
+  await applySync(db, { familyKey: FAM, since: 0, events: [
+    { id: 'e1', type: 'feed', at: 1, ml: 60, updatedAt: 100 },
+    { id: 'e2', type: 'diaper', at: 2, updatedAt: 100 },
+  ] });
+  // Ela edita e1 e apaga e2 enquanto o sync dele estava desligado.
+  await applySync(db, { familyKey: FAM, since: 0, events: [
+    { id: 'e1', type: 'feed', at: 1, ml: 90, updatedAt: 500 },
+    { id: 'e2', type: 'diaper', at: 2, deleted: true, updatedAt: 500 },
+  ] });
+  // Ele religa e reenvia as cópias antigas.
+  const dele = await applySync(db, { familyKey: FAM, since: 0, events: [
+    { id: 'e1', type: 'feed', at: 1, ml: 60, updatedAt: 200 },
+    { id: 'e2', type: 'diaper', at: 2, updatedAt: 200 },
+  ] });
+  const e1 = dele.events.find((e) => e.id === 'e1');
+  const e2 = dele.events.find((e) => e.id === 'e2');
+  assert.equal(e1.data.ml, 90, 'a edição dela precisa ficar');
+  assert.equal(e2.deleted, true, 'o apagado não pode voltar');
+  // E uma edição de fato mais nova continua passando.
+  const nova = await applySync(db, { familyKey: FAM, since: 0, events: [{ id: 'e1', type: 'feed', at: 1, ml: 120, updatedAt: 900 }] });
+  assert.equal(nova.events.find((e) => e.id === 'e1').data.ml, 120);
+});
+
+await teste('id repetido no mesmo envio fica com o último', async () => {
+  const db = fakeDb();
+  const r = await applySync(db, { familyKey: FAM, since: 0, events: [
+    { id: 'e1', type: 'feed', at: 1, ml: 10, updatedAt: 1 },
+    { id: 'e1', type: 'feed', at: 1, ml: 20, updatedAt: 2 },
+  ] });
+  assert.equal(r.events.length, 1);
+  assert.equal(r.events[0].data.ml, 20);
+});
+
 /* ------------------------------------------------------------------ cliente */
 
 await teste('mergeIncoming: adiciona novo, substitui limpo, preserva sujo', () => {
@@ -272,6 +312,54 @@ await teste('ciclo real: corrigir o início chega ao servidor e nada é reenviad
     globalThis.fetch = fetchOriginal;
     state.events = [];
     state.activeSleep = null;
+  }
+});
+
+await teste('religar o sync adota o perfil da família em vez de sobrescrevê-lo', async () => {
+  const db = fakeDb();
+  await applySync(db, { familyKey: FAM, since: 0, profile: { data: { baby: { name: 'Teresa' }, settings: {}, meds: [{ id: 'm1' }] } } });
+  const enviados = [];
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    enviados.push(body);
+    const out = await applySync(db, { familyKey: FAM, since: body.since, events: body.events, profile: body.profile, active: body.active });
+    return { ok: true, json: async () => out };
+  };
+  const antes = { baby: state.baby, settings: state.settings, meds: state.meds };
+  try {
+    state.events = [];
+    state.baby = { name: 'Velho' }; state.meds = [];
+    await enable('codigo-de-teste');
+    assert.equal(enviados[0].profile, null, 'não pode empurrar o perfil velho ao religar');
+    assert.equal(state.baby.name, 'Teresa', 'deveria adotar o perfil do servidor');
+    assert.equal(state.meds.length, 1, 'o remédio cadastrado no outro celular fica');
+  } finally {
+    disable();
+    globalThis.fetch = fetchOriginal;
+    Object.assign(state, antes);
+  }
+});
+
+await teste('primeiro celular da família ainda sobe o próprio perfil', async () => {
+  const db = fakeDb();
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async (_url, opts) => {
+    const body = JSON.parse(opts.body);
+    const out = await applySync(db, { familyKey: FAM, since: body.since, events: body.events, profile: body.profile, active: body.active });
+    return { ok: true, json: async () => out };
+  };
+  const antes = { baby: state.baby };
+  try {
+    state.events = [];
+    state.baby = { name: 'Primeira' };
+    await enable('codigo-de-teste');
+    await syncOnce();
+    assert.equal((await db.getProfile(FAM)).data.baby.name, 'Primeira');
+  } finally {
+    disable();
+    globalThis.fetch = fetchOriginal;
+    Object.assign(state, antes);
   }
 });
 
