@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert';
 import {
-  nextFeedAt, dueAlertAt, dueReminders, localTimeToday, normalizeMed, MS_MIN, MS_HOUR,
+  nextFeedAt, feedTargetAt, recentFeedIntervalMin, dueAlertAt, dueReminders, localTimeToday, normalizeMed, MS_MIN, MS_HOUR,
 } from '../lib/agenda-core.mjs';
 
 let falhas = 0;
@@ -135,6 +135,43 @@ teste('dueReminders: sem diaperTimes não lembra de troca', () => {
   perfil.settings.reminders = { diaperTimes: [], tzOffsetMin: -180 };
   const r = dueReminders(perfil, [], { now });
   assert.ok(!r.some((x) => x.kind === 'diaper'));
+});
+
+// Mamadas a cada 150 min (início→início) ao longo do último dia.
+const mamadasRegulares = (now, n = 8, gap = 150) => Array.from({ length: n }, (_, i) => {
+  const at = now - (n - i) * gap * MS_MIN;
+  return { type: 'feed', at, endAt: at + 20 * MS_MIN };
+});
+
+teste('feedTargetAt (média, padrão): início da última + mediana recente', () => {
+  const now = 3 * 24 * MS_HOUR;
+  const evs = mamadasRegulares(now);
+  assert.equal(recentFeedIntervalMin(perfilBase(), evs, { now, periodo: 'dia' }), 150);
+  assert.equal(feedTargetAt(perfilBase(), evs, { now }), evs.at(-1).at + 150 * MS_MIN);
+});
+
+teste('feedTargetAt (intervalo fixo): fim da última + intervalo configurado', () => {
+  const now = 3 * 24 * MS_HOUR;
+  const evs = mamadasRegulares(now);
+  const p = perfilBase(); p.settings.feedMode = 'intervalo';
+  assert.equal(feedTargetAt(p, evs, { now }), evs.at(-1).endAt + 180 * MS_MIN);
+});
+
+teste('feedTargetAt (média) sem histórico cai no intervalo fixo', () => {
+  const now = 10 * MS_HOUR;
+  const evs = [{ type: 'feed', at: now - 200 * MS_MIN, endAt: now - 180 * MS_MIN }];
+  assert.equal(feedTargetAt(perfilBase(), evs, { now }), now);
+});
+
+teste('dueReminders segue o modo: média avisa antes do intervalo fixo', () => {
+  const now = 3 * 24 * MS_HOUR;
+  const evs = mamadasRegulares(now);
+  // Última mamada começou há 150 min: pela média (150) já venceu; pelo fixo
+  // (fim + 180 = daqui a 50 min) ainda não.
+  const media = dueReminders(perfilBase(), evs, { now });
+  assert.ok(media.some((r) => r.kind === 'feed'), 'modo média deveria avisar');
+  const p = perfilBase(); p.settings.feedMode = 'intervalo';
+  assert.ok(!dueReminders(p, evs, { now }).some((r) => r.kind === 'feed'), 'modo intervalo não deveria avisar ainda');
 });
 
 if (falhas) { console.error(`\n${falhas} teste(s) falharam.`); process.exit(1); }

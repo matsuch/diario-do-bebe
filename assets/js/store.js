@@ -29,20 +29,13 @@ function estadoInicial() {
     baby: { name: '', birth: '', sex: '' },
     settings: {
       feedIntervalMin: 180,
+      // Como prever a próxima mamada (e quando avisar):
+      //  'media'     — padrão recente do bebê (mediana dos últimos 7 dias, por
+      //                período do dia); o intervalo acima só vale até ter histórico;
+      //  'intervalo' — intervalo fixo desde o fim da última mamada (o "acordar
+      //                de 3 em 3 horas" dos primeiros dias).
+      feedMode: 'media',
       notify: false,
-      // Integração com WhatsApp via API não-oficial (WAHA ou Evolution).
-      wa: {
-        enabled: false,
-        provider: 'waha',   // 'waha' | 'evolution'
-        baseUrl: '',        // ex.: https://waha.seudominio.com
-        apiKey: '',         // X-Api-Key (WAHA) ou apikey (Evolution)
-        session: 'default', // sessão (WAHA) ou nome da instância (Evolution)
-        numbers: '',        // destinos, separados por vírgula (DDI+DDD+número)
-        onReminder: true,   // manda no WhatsApp junto do aviso local
-        // URL do worker 24/7 (server/) que recebe a agenda e dispara na madrugada
-        workerUrl: '',
-        workerToken: '', // segredo compartilhado com o worker (header x-worker-token)
-      },
       // Notificações push simples via ntfy.sh (sem servidor próprio).
       ntfy: {
         enabled: false,
@@ -73,7 +66,10 @@ function migrar(dados) {
   const s = { ...base, ...dados };
   s.baby = { ...base.baby, ...(dados.baby || {}) };
   s.settings = { ...base.settings, ...(dados.settings || {}) };
-  s.settings.wa = { ...base.settings.wa, ...((dados.settings || {}).wa || {}) };
+  // A integração com WhatsApp saiu do app: some com a config antiga (tinha
+  // chave de API e números, que não devem continuar indo no perfil sincronizado).
+  delete s.settings.wa;
+  if (s.settings.feedMode !== 'intervalo') s.settings.feedMode = 'media';
   s.settings.ntfy = { ...base.settings.ntfy, ...((dados.settings || {}).ntfy || {}) };
   s.settings.reminders = { ...base.settings.reminders, ...((dados.settings || {}).reminders || {}) };
   s.device = { ...base.device, ...(dados.device || {}) };
@@ -606,13 +602,26 @@ export function recentFeedIntervalMin(ref = Date.now(), periodo = periodoDe(ref)
   return Math.round(Math.min(cfg * 1.5, Math.max(cfg * 0.5, median(usar.map((g) => g.min)))));
 }
 
-/** Próxima mamada prevista pelo padrão recente do período (só para a Home; lembretes seguem o intervalo configurado). */
+/** Próxima mamada prevista pelo padrão recente do período (modo 'media'). */
 export function predictedFeedAt() {
   const ultima = lastEvent('feed');
   if (!ultima) return null;
   const intervalo = recentFeedIntervalMin(Date.now(), periodoDe(ultima.at));
   if (intervalo == null) return nextFeedAt(); // sem histórico: intervalo configurado
   return ultima.at + intervalo * MS_MIN;
+}
+
+/** Modo escolhido nos Ajustes para prever a próxima mamada. */
+export function feedMode() {
+  return state.settings.feedMode === 'intervalo' ? 'intervalo' : 'media';
+}
+
+/**
+ * Próxima mamada conforme o modo dos Ajustes — é o que a Home mostra e o que
+ * dispara o aviso: pela média recente ou pelo intervalo fixo.
+ */
+export function feedTargetAt() {
+  return feedMode() === 'intervalo' ? nextFeedAt() : predictedFeedAt();
 }
 
 /**
@@ -630,7 +639,7 @@ export function fussRisk(ref = Date.now()) {
     if (ref > nap.end + 15 * MS_MIN) { motivos.push('passou da janela de sono — cansaço vira choro'); score += 2; }
     else if (ref >= nap.start) { motivos.push('já está na janela de sono'); score += 1; }
   }
-  const feed = predictedFeedAt();
+  const feed = feedTargetAt();
   if (feed) {
     if (ref > feed + 30 * MS_MIN) { motivos.push('mamada atrasada — pode estar com fome'); score += 2; }
     else if (ref >= feed - 10 * MS_MIN) { motivos.push('hora de mamar chegando'); score += 1; }
@@ -813,11 +822,16 @@ export function agenda(horas = 24) {
   const limite = agora + horas * MS_HOUR;
   const linhas = [];
 
-  let proximaMamada = nextFeedAt();
-  const intervalo = state.settings.feedIntervalMin * MS_MIN;
+  // No modo 'media' cada passo usa o padrão do período em que cai (a
+  // madrugada costuma ser mais espaçada); no 'intervalo', o passo é fixo.
+  const passo = (t) => {
+    if (feedMode() === 'intervalo') return state.settings.feedIntervalMin * MS_MIN;
+    return (recentFeedIntervalMin(agora, periodoDe(t)) ?? state.settings.feedIntervalMin) * MS_MIN;
+  };
+  let proximaMamada = feedTargetAt();
   if (proximaMamada) {
-    while (proximaMamada < agora) proximaMamada += intervalo;
-    for (let t = proximaMamada; t <= limite; t += intervalo) {
+    while (proximaMamada < agora) proximaMamada += passo(proximaMamada);
+    for (let t = proximaMamada; t <= limite; t += passo(t)) {
       linhas.push({ at: t, emoji: '🍼', text: 'Mamada' });
     }
   }

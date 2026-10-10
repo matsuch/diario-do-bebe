@@ -7,7 +7,6 @@ import {
 } from './format.js';
 import * as CRESC from './crescimento.js';
 import * as GUIA from './fases.js';
-import * as WA from './wa.js';
 import * as NTFY from './ntfy.js';
 import * as SYNC from './sync.js';
 
@@ -308,7 +307,7 @@ function heroFoco() {
   if (state.activeFeed) return { label: 'Mamando agora', big: `desde ${fmtTime(state.activeFeed.startAt)}`, tone: 'lamp' };
   if (state.activeSleep) return { label: 'Dormindo', big: fmtHM(Date.now() - state.activeSleep.startAt), tone: 'sleep', at: state.activeSleep.startAt };
   const cand = [];
-  const feed = S.predictedFeedAt();
+  const feed = S.feedTargetAt();
   if (feed) cand.push({ at: feed, label: 'Próxima mamada', tone: 'lamp' });
   const nap = S.nextNap();
   if (nap) cand.push({ at: nap.start, label: 'Próxima soneca', tone: 'sleep' });
@@ -627,6 +626,15 @@ function renderHero(container) {
   container.append(chips);
 }
 
+/** De onde vem a previsão da próxima mamada, conforme o modo dos Ajustes. */
+function subProximaMamada() {
+  const cfg = fmtMin(state.settings.feedIntervalMin);
+  if (S.feedMode() === 'intervalo') return `intervalo fixo: ${cfg} após o fim da última`;
+  const periodo = S.periodoDe(S.lastEvent('feed').at);
+  const intervalo = S.recentFeedIntervalMin(Date.now(), periodo);
+  return intervalo ? `média recente (${periodo}): a cada ~${fmtMin(intervalo)}` : `ainda sem histórico: a cada ${cfg}`;
+}
+
 function renderAgora() {
   renderHero($('#hero'));
 
@@ -638,13 +646,10 @@ function renderAgora() {
   if (risco) cards.append(risco);
   const soneca = cardJanelaSono();
   if (soneca) cards.append(soneca);
-  const mamadaPrevista = S.predictedFeedAt();
+  const mamadaPrevista = S.feedTargetAt();
   if (mamadaPrevista && !state.activeFeed) {
-    const ultimaMamada = S.lastEvent('feed');
-    const intervalo = S.recentFeedIntervalMin(Date.now(), S.periodoDe(ultimaMamada.at));
     cards.append(cartaoProximo({
-      emoji: '🍼', titulo: 'Próxima mamada',
-      sub: intervalo ? `padrão recente (${S.periodoDe(ultimaMamada.at)}): a cada ~${fmtMin(intervalo)}` : `intervalo configurado: ${fmtMin(state.settings.feedIntervalMin)}`,
+      emoji: '🍼', titulo: 'Próxima mamada', sub: subProximaMamada(),
       at: mamadaPrevista, onClick: iniciarMamada,
     }));
   }
@@ -1173,7 +1178,7 @@ function renderRemedios() {
       S.takeMed(med);
       if (!med.repeat) S.saveMed({ id: med.id, active: false }); // one-off vira concluído
       vibrar();
-      toast(`${med.name} registrado às ${fmtTime(Date.now())}`);
+      toast(`${med.name} · registrado às ${fmtTime(Date.now())}`);
     });
     const ajustar = el('button', 'btn btn-ghost btn-icon', '⏱');
     ajustar.title = 'Registrar em outro horário';
@@ -1199,7 +1204,7 @@ function sheetDoseHorario(med) {
     if (!at) return;
     S.takeMed(med, at);
     closeSheet();
-    toast(`${med.name} registrado às ${fmtTime(at)}`);
+    toast(`${med.name} · registrado às ${fmtTime(at)}`);
   });
   openSheet(med.name, form);
 }
@@ -1803,11 +1808,11 @@ function sheetMedida(ev = null) {
     <label class="field"><span>Peso (kg)</span>
       <input type="number" name="peso" step="0.005" min="0.5" max="40" inputmode="decimal"
         value="${ev && ev.weightKg > 0 ? ev.weightKg : ''}"
-        placeholder="${ultimoPeso ? num(ultimoPeso.weightKg, 3) : 'ex.: 4,25'}"></label>
+        placeholder="${ultimoPeso ? num(ultimoPeso.weightKg, 3) : 'Ex.: 4,25'}"></label>
     <label class="field"><span>Altura (cm)</span>
       <input type="number" name="altura" step="0.1" min="20" max="150" inputmode="decimal"
         value="${ev && ev.heightCm > 0 ? ev.heightCm : ''}"
-        placeholder="${ultimaAltura ? num(ultimaAltura.heightCm, 1) : 'ex.: 54,5'}"></label>
+        placeholder="${ultimaAltura ? num(ultimaAltura.heightCm, 1) : 'Ex.: 54,5'}"></label>
     <p class="muted small">Pode preencher só um dos dois.</p>
     <button class="btn btn-primary block" type="submit">Salvar medida</button>
     ${ev ? '<button class="btn btn-ghost block" type="button" id="medidaDel">Apagar registro</button>' : ''}`;
@@ -1892,6 +1897,7 @@ function renderAjustes() {
   setVal('#setBirth', state.baby.birth || '');
   setVal('#setSex', state.baby.sex || '');
   $('#setInterval').value = String(state.settings.feedIntervalMin);
+  renderModoMamada();
   $('#setNotify').checked = !!state.settings.notify && Notification.permission === 'granted';
   const totalRegistros = state.events.filter((e) => !e.deleted).length;
   $('#version').textContent = `Rotina do Bebê · ${totalRegistros} registros`;
@@ -1902,19 +1908,6 @@ function renderAjustes() {
   setVal('#syncDevice', S.deviceName());
   renderSyncStatus();
 
-  const wa = state.settings.wa;
-  $('#waEnabled').checked = !!wa.enabled;
-  $('#waFields').hidden = !wa.enabled;
-  $('#waProvider').value = wa.provider;
-  setVal('#waBaseUrl', wa.baseUrl);
-  setVal('#waApiKey', wa.apiKey);
-  setVal('#waSession', wa.session);
-  setVal('#waNumbers', wa.numbers);
-  $('#waOnReminder').checked = !!wa.onReminder;
-  setVal('#waWorkerUrl', wa.workerUrl);
-  setVal('#waWorkerToken', wa.workerToken);
-  $('#waSessionLabel').textContent = wa.provider === 'evolution' ? 'Instância' : 'Sessão';
-
   const ntfy = state.settings.ntfy;
   $('#ntfyEnabled').checked = !!ntfy.enabled;
   $('#ntfyFields').hidden = !ntfy.enabled;
@@ -1922,6 +1915,25 @@ function renderAjustes() {
   setVal('#ntfyTopic', ntfy.topic);
   $('#ntfyOnReminder').checked = !!ntfy.onReminder;
   setVal('#ntfyDiaper', (state.settings.reminders?.diaperTimes || []).join(', '));
+}
+
+/** Texto do modo de previsão da mamada (média × intervalo fixo) nos Ajustes. */
+const MODO_MAMADA = {
+  media: {
+    rotulo: 'Intervalo enquanto não há histórico',
+    dica: 'Segue o ritmo real do bebê: a mediana dos intervalos entre mamadas dos últimos 7 dias, separada por período (dia, noite e madrugada). Até haver registros suficientes, vale o intervalo abaixo.',
+  },
+  intervalo: {
+    rotulo: 'Intervalo entre mamadas',
+    dica: 'Conta um intervalo fixo a partir do fim da última mamada, sem olhar o histórico. Útil nos primeiros dias, quando é preciso acordar o bebê para mamar.',
+  },
+};
+
+function renderModoMamada() {
+  const modo = S.feedMode();
+  document.querySelectorAll('input[name="feedMode"]').forEach((r) => { r.checked = r.value === modo; });
+  $('#feedModeHint').textContent = MODO_MAMADA[modo].dica;
+  $('#setIntervalLabel').textContent = MODO_MAMADA[modo].rotulo;
 }
 
 function renderSyncStatus() {
@@ -1983,16 +1995,6 @@ function avisar(titulo, corpo, tag) {
   vibrar([80, 60, 80]);
 }
 
-/** Envia no WhatsApp quando um aviso dispara (best-effort, só com o app aberto). */
-function avisarWhatsApp(texto) {
-  const wa = state.settings.wa;
-  if (!wa.enabled || !wa.onReminder) return;
-  const nome = state.baby.name?.trim();
-  WA.broadcast(wa, `${nome ? `${nome} · ` : ''}${texto}`).catch((err) => {
-    console.warn('WhatsApp falhou:', err.message);
-  });
-}
-
 /** Dispara um push imediato pelo ntfy quando o aviso toca (app aberto). */
 function avisarNtfy(texto) {
   const ntfy = state.settings.ntfy;
@@ -2013,7 +2015,7 @@ function checarAvisos() {
   if (!state.settings.notify || Notification.permission !== 'granted') return;
   const agora = Date.now();
 
-  const mamada = S.nextFeedAt();
+  const mamada = S.feedTargetAt();
   if (mamada && agora >= mamada && agora - mamada < 30 * MS_MIN && !state.activeFeed) {
     const chave = `feed:${mamada}`;
     if (!avisados.has(chave)) {
@@ -2021,7 +2023,6 @@ function checarAvisos() {
       const lado = S.nextSide();
       const corpo = lado ? `Oferecer o lado ${SIDE_LABEL[lado]}.` : 'Toque para registrar.';
       avisar('Hora da mamada 🍼', corpo, chave);
-      avisarWhatsApp(`🍼 Hora da mamada. ${corpo}`);
       avisarNtfy(`🍼 Hora da mamada. ${corpo}`);
     }
   }
@@ -2035,22 +2036,7 @@ function checarAvisos() {
     const emoji = catInfo(med.category).emoji;
     const corpo = med.dose || repeatLabel(med);
     avisar(`${med.name} ${emoji}`, corpo, chave);
-    avisarWhatsApp(`${emoji} ${med.name}. ${corpo}`);
     avisarNtfy(`${emoji} ${med.name}. ${corpo}`);
-  });
-}
-
-/** Empurra a agenda para o worker 24/7, no máximo a cada 5 min (best-effort). */
-let ultimoPush = 0;
-function sincronizarWorker(forcar = false) {
-  const wa = state.settings.wa;
-  if (!wa.enabled || !wa.workerUrl) return Promise.resolve({ skipped: true });
-  const agora = Date.now();
-  if (!forcar && agora - ultimoPush < 5 * MS_MIN) return Promise.resolve({ skipped: true });
-  ultimoPush = agora;
-  return WA.pushAgenda(wa, S.agenda(24)).catch((err) => {
-    console.warn('Sync com worker falhou:', err.message);
-    return { error: err.message };
   });
 }
 
@@ -2078,7 +2064,6 @@ function checarMetaArroto() {
     if (state.settings.notify && Notification.permission === 'granted') {
       avisar('Arroto: 20 min ✅', 'Meta de arroto atingida — pode encerrar quando quiser.', 'burp-meta');
     }
-    avisarWhatsApp('💨 Arroto: 20 min completos.');
     avisarNtfy('💨 Arroto: 20 min completos.');
     if (viewAtual !== 'agora') toast('Arroto: 20 min atingidos ✅');
   }
@@ -2088,10 +2073,7 @@ function tick() {
   if (viewAtual === 'agora' || viewAtual === 'remedios') render();
   checarAvisos();
   checarMetaArroto();
-  sincronizarWorker();
 }
-
-/* ================================================================ WhatsApp (UI) */
 
 /* ================================================================ sincronização (UI) */
 
@@ -2219,84 +2201,6 @@ function ligarEventosNtfy() {
   $('#ntfyDiaper').addEventListener('change', lerConfigNtfy);
 }
 
-function lerConfigWhatsApp() {
-  const wa = state.settings.wa;
-  wa.provider = $('#waProvider').value;
-  wa.baseUrl = $('#waBaseUrl').value.trim();
-  wa.apiKey = $('#waApiKey').value.trim();
-  wa.session = $('#waSession').value.trim() || 'default';
-  wa.numbers = $('#waNumbers').value.trim();
-  wa.onReminder = $('#waOnReminder').checked;
-  wa.workerUrl = $('#waWorkerUrl').value.trim();
-  wa.workerToken = $('#waWorkerToken').value.trim();
-  S.save();
-}
-
-function ligarEventosWhatsApp() {
-  $('#waEnabled').addEventListener('change', (e) => {
-    state.settings.wa.enabled = e.target.checked;
-    $('#waFields').hidden = !e.target.checked;
-    S.save();
-  });
-
-  // Campos: salvam ao editar; provider também troca o rótulo Sessão/Instância.
-  ['waBaseUrl', 'waApiKey', 'waSession', 'waNumbers', 'waWorkerUrl', 'waWorkerToken'].forEach((id) => {
-    $(`#${id}`).addEventListener('change', lerConfigWhatsApp);
-  });
-  $('#waOnReminder').addEventListener('change', lerConfigWhatsApp);
-  $('#waProvider').addEventListener('change', () => {
-    lerConfigWhatsApp();
-    $('#waSessionLabel').textContent = state.settings.wa.provider === 'evolution' ? 'Instância' : 'Sessão';
-  });
-
-  $('#waTest').addEventListener('click', async (e) => {
-    lerConfigWhatsApp();
-    const wa = state.settings.wa;
-    const numeros = WA.parseNumbers(wa.numbers);
-    if (!wa.baseUrl || !numeros.length) { toast('Preencha URL e ao menos um número'); return; }
-    e.target.disabled = true;
-    toast('Enviando teste…');
-    try {
-      const r = await WA.broadcast(wa, '✅ Teste do Rotina do Bebê — está funcionando!');
-      toast(`Teste enviado (${r.enviados}/${r.total})`);
-    } catch (err) {
-      alert(`Falha ao enviar: ${err.message}\n\nVerifique URL, chave, sessão e o CORS do servidor.`);
-    } finally {
-      e.target.disabled = false;
-    }
-  });
-
-  $('#waSendSummary').addEventListener('click', async (e) => {
-    lerConfigWhatsApp();
-    const wa = state.settings.wa;
-    if (!wa.baseUrl || !WA.parseNumbers(wa.numbers).length) { toast('Preencha URL e ao menos um número'); return; }
-    e.target.disabled = true;
-    toast('Enviando resumo…');
-    try {
-      const r = await WA.broadcast(wa, textoResumo());
-      toast(`Resumo enviado (${r.enviados}/${r.total})`);
-    } catch (err) {
-      alert(`Falha ao enviar: ${err.message}`);
-    } finally {
-      e.target.disabled = false;
-    }
-  });
-
-  $('#waPush').addEventListener('click', async (e) => {
-    lerConfigWhatsApp();
-    if (!state.settings.wa.workerUrl) { toast('Informe a URL do worker 24/7'); return; }
-    e.target.disabled = true;
-    toast('Sincronizando…');
-    try {
-      await sincronizarWorker(true);
-      toast('Agenda enviada ao worker');
-    } catch (err) {
-      alert(`Falha ao sincronizar: ${err.message}`);
-    } finally {
-      e.target.disabled = false;
-    }
-  });
-}
 
 /* ================================================================ eventos de UI */
 
@@ -2346,7 +2250,6 @@ function ligarEventos() {
 
   ligarEventosSync();
   ligarEventosNtfy();
-  ligarEventosWhatsApp();
 
   $('#setName').addEventListener('input', (e) => { state.baby.name = e.target.value; S.save(); });
   $('#setBirth').addEventListener('change', (e) => { state.baby.birth = e.target.value; S.save(); });
@@ -2356,6 +2259,12 @@ function ligarEventos() {
     state.settings.feedIntervalMin = Number(e.target.value);
     S.save();
   });
+  document.querySelectorAll('input[name="feedMode"]').forEach((r) => r.addEventListener('change', (e) => {
+    if (!e.target.checked) return;
+    state.settings.feedMode = e.target.value === 'intervalo' ? 'intervalo' : 'media';
+    S.save();
+    renderModoMamada();
+  }));
   $('#setNotify').addEventListener('change', async (e) => {
     if (e.target.checked) {
       const ok = await pedirPermissao();

@@ -295,32 +295,19 @@ try {
   checar(await page.locator('#view-diario #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
   await shot('diario.png');
 
-  // config de WhatsApp: liga, preenche e testa o "Enviar teste" (fetch stubado)
+  // Ajustes: a integração com WhatsApp saiu; a previsão da mamada tem dois modos
   await page.click('#btnAjustes');
-  await page.check('#waEnabled');
-  checar(!(await page.locator('#waFields').isHidden()), 'campos de WhatsApp não apareceram ao ligar');
-  await page.selectOption('#waProvider', 'waha');
-  await page.fill('#waBaseUrl', 'https://waha.exemplo.com');
-  await page.fill('#waApiKey', 'chave-secreta');
-  await page.fill('#waSession', 'default');
-  await page.fill('#waNumbers', '5511999998888');
-  await page.evaluate(() => {
-    window.__wa = [];
-    window.fetch = async (url, opts) => {
-      window.__wa.push({ url, body: JSON.parse(opts.body), headers: opts.headers });
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
-    };
-  });
-  await page.click('#waTest');
-  await page.waitForFunction(() => window.__wa && window.__wa.length > 0, { timeout: 4000 });
-  const chamada = await page.evaluate(() => window.__wa[0]);
-  checar(chamada.url === 'https://waha.exemplo.com/api/sendText', `URL do WAHA errada: ${chamada.url}`);
-  checar(chamada.body.chatId === '5511999998888@c.us', `chatId errado: ${chamada.body.chatId}`);
-  checar(chamada.headers['X-Api-Key'] === 'chave-secreta', 'X-Api-Key não foi enviado');
-  const waSalvo = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('rotina-bebe:v1')).settings.wa);
-  checar(waSalvo.enabled === true && waSalvo.baseUrl === 'https://waha.exemplo.com',
-    'config de WhatsApp não persistiu');
+  checar(await page.locator('#waEnabled').count() === 0, 'WhatsApp deveria ter saído dos Ajustes');
+  checar(await page.locator('input[name="feedMode"][value="media"]').isChecked(), 'modo padrão deveria ser "Pela média"');
+  await page.check('input[name="feedMode"][value="intervalo"]');
+  const modoSalvo = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).settings);
+  checar(modoSalvo.feedMode === 'intervalo', 'modo "Intervalo fixo" não persistiu');
+  checar(!('wa' in modoSalvo), 'config antiga de WhatsApp deveria sumir do estado salvo');
+  checar((await page.textContent('#setIntervalLabel')).trim() === 'Intervalo entre mamadas', 'rótulo do intervalo não acompanhou o modo');
+  await page.click('.tab[data-view="agora"]');
+  checar((await page.textContent('#nextCards')).includes('intervalo fixo'), 'Home não mostrou que está no intervalo fixo');
+  await page.click('#btnAjustes');
+  await page.check('input[name="feedMode"][value="media"]');
 
   // config de ntfy: liga (gera tópico), testa envio e programa lembretes (fetch stubado)
   await page.check('#ntfyEnabled');
