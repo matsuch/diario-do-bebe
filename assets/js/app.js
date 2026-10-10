@@ -632,7 +632,8 @@ function subProximaMamada() {
   if (S.feedMode() === 'intervalo') return `intervalo fixo: ${cfg} após o fim da última`;
   const periodo = S.periodoDe(S.lastEvent('feed').at);
   const intervalo = S.recentFeedIntervalMin(Date.now(), periodo);
-  return intervalo ? `média recente (${periodo}): a cada ~${fmtMin(intervalo)}` : `ainda sem histórico: a cada ${cfg}`;
+  const de = { dia: 'do dia', noite: 'da noite', madrugada: 'da madrugada' }[periodo];
+  return intervalo ? `média ${de}: a cada ~${fmtMin(intervalo)}` : `sem histórico ainda: a cada ${cfg}`;
 }
 
 function renderAgora() {
