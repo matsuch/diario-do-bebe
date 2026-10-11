@@ -483,6 +483,12 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .guia-acc[open] > summary .guia-seta { transform: rotate(-90deg); }
 .guia-acc[open] { border-color: var(--line); }
 
+/* Atividades: letra de música, verso por linha */
+.musica-letra {
+  margin: var(--sp-tight) 0 0; white-space: pre-line;
+  font-size: 15px; font-weight: 600; line-height: 1.6;
+}
+
 /* "quando procurar orientação": borda de atenção sem virar alarme */
 .guia-alerta { border-color: color-mix(in oklab, var(--accent) 26%, var(--line-soft)); }
 .guia-ok {

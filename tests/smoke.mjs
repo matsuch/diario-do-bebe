@@ -299,10 +299,20 @@ try {
   checar(await page.locator('#view-evolucao #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
   await shot('diario.png');
 
-  // Atividades: entrou no lugar do Diário no menu, por enquanto só um aviso
+  // Atividades: músicas só com a letra, 10 em português e 5 em inglês
   await page.click('.tab[data-view="atividades"]');
   checar(!(await page.locator('#view-atividades').isHidden()), 'aba Atividades não abriu');
   checar((await page.textContent('#topTitle')) === 'Atividades', 'título do topo deveria ser Atividades');
+  checar(await page.locator('#musicasPt .musica').count() === 10, 'deveria ter 10 músicas em português');
+  checar(await page.locator('#musicasEn .musica').count() === 5, 'deveria ter 5 músicas em inglês');
+  checar(!(await page.locator('#musicasPt .musica-letra').first().isVisible()), 'a letra deveria começar fechada');
+  await page.click('#musicasPt .musica summary >> nth=0');
+  checar((await page.locator('#musicasPt .musica-letra').first().textContent()).includes('Nana, neném'),
+    'abrir a música deveria mostrar a letra');
+  // trocar de aba e voltar não pode redesenhar (nem duplicar) a lista
+  await page.click('.tab[data-view="agora"]');
+  await page.click('.tab[data-view="atividades"]');
+  checar(await page.locator('#view-atividades .musica').count() === 15, 'a lista de músicas duplicou');
   await shot('atividades.png');
 
   // Ajustes: a integração com WhatsApp saiu; a previsão da mamada tem dois modos
@@ -392,7 +402,7 @@ try {
     return medidas;
   });
   // o Diário agora é a terceira sub-aba da Evolução: mede ela também
-  for (const [aba, sub] of [['agora'], ['remedios'], ['evolucao'], ['evolucao', 'diario']]) {
+  for (const [aba, sub] of [['agora'], ['remedios'], ['atividades'], ['evolucao'], ['evolucao', 'diario']]) {
     await page.click(`.tab[data-view="${aba}"]`);
     if (sub) await page.click(`.subtab[data-evo="${sub}"]`);
     await page.waitForTimeout(350); // deixa a animação de entrada da view terminar

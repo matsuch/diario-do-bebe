@@ -9,6 +9,7 @@ import * as CRESC from './crescimento.js';
 import * as GUIA from './fases.js';
 import * as NTFY from './ntfy.js';
 import * as SYNC from './sync.js';
+import { MUSICAS } from './musicas.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -1689,6 +1690,31 @@ function renderGuia() {
   if (regua) centralizarRegua(regua);
 }
 
+/* ================================================================ ATIVIDADES */
+
+let musicasDesenhadas = false;
+
+/** Músicas em sanfona (mesmo visual das categorias do Guia), desenhadas uma vez. */
+function renderAtividades() {
+  if (musicasDesenhadas) return;
+  musicasDesenhadas = true;
+  const listas = { pt: $('#musicasPt'), en: $('#musicasEn') };
+  MUSICAS.forEach((m) => {
+    const acc = el('details', 'guia-acc musica');
+    const sum = document.createElement('summary');
+    sum.append(el('span', `guia-ic ${m.dormir ? 'tint-sleep' : 'tint-lamp'}`, m.dormir ? '🌙' : '🎈'));
+    const txt = el('div', 'guia-card-txt');
+    const titulo = el('b');
+    titulo.textContent = m.titulo;
+    txt.append(titulo, el('span', 'guia-prev', m.dormir ? 'Para ninar' : 'Para cantar e brincar'));
+    sum.append(txt, el('span', 'guia-seta', '›'));
+    const letra = el('p', 'musica-letra');
+    letra.textContent = m.letra;
+    acc.append(sum, letra);
+    listas[m.lingua].append(acc);
+  });
+}
+
 /* ================================================================ EVOLUÇÃO */
 
 const MEDIDAS = [
@@ -2051,6 +2077,7 @@ function render() {
 
   if (viewAtual === 'agora') renderAgora();
   else if (viewAtual === 'remedios') renderRemedios();
+  else if (viewAtual === 'atividades') renderAtividades();
   else if (viewAtual === 'evolucao') renderEvolucao();
   else if (viewAtual === 'ajustes') renderAjustes();
 }
