@@ -273,8 +273,12 @@ try {
 
   await shot('evolucao.png');
 
-  // diário: só gráficos — sono, xixis e cocôs dos últimos 7 dias
-  await page.click('.tab[data-view="diario"]');
+  // diário: virou a terceira aba da Evolução — só gráficos de sono, xixis e cocôs
+  checar(await page.locator('.tab[data-view="diario"]').count() === 0, 'Diário não deveria mais ser uma aba do menu');
+  await page.click('.tab[data-view="evolucao"]');
+  await page.click('.subtab[data-evo="diario"]');
+  checar(!(await page.locator('#view-evolucao > .guia-hero').isVisible()), 'o Guia deveria sumir na aba Diário');
+  checar(!(await page.locator('#medidaGrid').isVisible()), 'os Registros deveriam sumir na aba Diário');
   checar(await page.locator('#chartSono .wc-meta').count() === 2, 'sono deveria ter as duas linhas de meta (mín. e máx.)');
   checar(await page.locator('#chartXixi .wc-meta').count() === 1, 'xixi deveria ter uma linha de meta (mínimo)');
   checar(await page.locator('#chartCoco .wc-meta').count() === 0, 'aos 43 dias cocô não deveria ter linha de meta');
@@ -292,8 +296,14 @@ try {
     }
   }
   checar(await page.locator('#dayGrid .stat').count() === 5, 'cards de hoje sumiram do Diário');
-  checar(await page.locator('#view-diario #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
+  checar(await page.locator('#view-evolucao #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
   await shot('diario.png');
+
+  // Atividades: entrou no lugar do Diário no menu, por enquanto só um aviso
+  await page.click('.tab[data-view="atividades"]');
+  checar(!(await page.locator('#view-atividades').isHidden()), 'aba Atividades não abriu');
+  checar((await page.textContent('#topTitle')) === 'Atividades', 'título do topo deveria ser Atividades');
+  await shot('atividades.png');
 
   // Ajustes: a integração com WhatsApp saiu; a previsão da mamada tem dois modos
   await page.click('#btnAjustes');
@@ -381,8 +391,10 @@ try {
     }
     return medidas;
   });
-  for (const aba of ['agora', 'remedios', 'diario', 'evolucao']) {
+  // o Diário agora é a terceira sub-aba da Evolução: mede ela também
+  for (const [aba, sub] of [['agora'], ['remedios'], ['evolucao'], ['evolucao', 'diario']]) {
     await page.click(`.tab[data-view="${aba}"]`);
+    if (sub) await page.click(`.subtab[data-evo="${sub}"]`);
     await page.waitForTimeout(350); // deixa a animação de entrada da view terminar
     const medidas = await espacos();
     checar(medidas.length > 0, `não consegui medir o espaçamento da aba ${aba}`);

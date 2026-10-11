@@ -17,14 +17,14 @@ const TITULOS = {
   agora: 'Início',
   remedios: 'Alertas',
   evolucao: 'Evolução',
-  diario: 'Diário',
+  atividades: 'Atividades',
   ajustes: 'Ajustes',
 };
 
 const BURP_TARGET_MIN = 20; // meta do cronômetro de arroto
 
 let viewAtual = 'agora';
-let evoAba = 'guia'; // sub-aba da Evolução: 'guia' (padrão) ou 'registro'
+let evoAba = 'guia'; // sub-aba da Evolução: 'guia' (padrão), 'registro' ou 'diario'
 let diaDiario = 0; // 0 = hoje, -1 = ontem...
 let burpAvisado = false; // já avisou que a meta de arroto foi atingida?
 
@@ -1748,6 +1748,7 @@ function renderEvolucao() {
 
   renderEvolucaoRotina($('#evolucaoRotina'));
   renderGuia();
+  if (evoAba === 'diario') renderDiario();
 }
 
 /** Como a rotina dos últimos 7 dias se compara com o esperado para a idade. */
@@ -2050,7 +2051,6 @@ function render() {
 
   if (viewAtual === 'agora') renderAgora();
   else if (viewAtual === 'remedios') renderRemedios();
-  else if (viewAtual === 'diario') renderDiario();
   else if (viewAtual === 'evolucao') renderEvolucao();
   else if (viewAtual === 'ajustes') renderAjustes();
 }
