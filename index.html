@@ -71,10 +71,14 @@
 
   <!-- ============ ATIVIDADES ============ -->
   <section class="view" id="view-atividades" hidden>
-    <div class="card guia-vazio" id="atividadesVazio">
-      <b>Atividades</b>
-      <p class="muted small">Em breve, um espaço para as atividades do dia a dia com o bebê.</p>
-    </div>
+    <!-- Músicas: só a letra, para cantar junto. As sanfonas são montadas em JS
+         (musicas.js) uma vez só, para não fecharem a cada novo registro. -->
+    <h2 class="section-title">🎵 Músicas</h2>
+    <p class="muted small">Cantigas para cantar junto. Cantar ajuda na linguagem e no vínculo, e as de ninar (🌙) acalmam na hora de dormir. Toque em ▶ para ouvir a versão oficial no Spotify (precisa de internet).</p>
+    <h2 class="section-title">Em português</h2>
+    <div class="stack" id="musicasPt"></div>
+    <h2 class="section-title">Em inglês</h2>
+    <div class="stack" id="musicasEn"></div>
   </section>
 
   <!-- ============ EVOLUÇÃO ============ -->

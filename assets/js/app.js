@@ -9,6 +9,7 @@ import * as CRESC from './crescimento.js';
 import * as GUIA from './fases.js';
 import * as NTFY from './ntfy.js';
 import * as SYNC from './sync.js';
+import { MUSICAS } from './musicas.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -1689,6 +1690,51 @@ function renderGuia() {
   if (regua) centralizarRegua(regua);
 }
 
+/* ================================================================ ATIVIDADES */
+
+let musicasDesenhadas = false;
+
+/**
+ * Botão que troca por um player do Spotify embutido, sem sair do app. O iframe só
+ * entra no toque: 15 players carregando de cara pesariam a tela e gastariam dados.
+ * Sem login Premium no navegador, o Spotify toca só uma prévia de 30 segundos.
+ */
+function playerMusica(m) {
+  const btn = el('button', 'btn btn-ghost block musica-play', `▶ Ouvir no Spotify · ${m.artista}`);
+  btn.type = 'button';
+  btn.addEventListener('click', () => {
+    vibrar();
+    const frame = el('iframe', 'musica-spotify');
+    frame.src = `https://open.spotify.com/embed/track/${m.spotify}?utm_source=generator`;
+    frame.title = `${m.titulo} — ${m.artista} no Spotify`;
+    frame.loading = 'lazy';
+    frame.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+    btn.replaceWith(frame);
+  });
+  return btn;
+}
+
+/** Músicas em sanfona (mesmo visual das categorias do Guia), desenhadas uma vez. */
+function renderAtividades() {
+  if (musicasDesenhadas) return;
+  musicasDesenhadas = true;
+  const listas = { pt: $('#musicasPt'), en: $('#musicasEn') };
+  MUSICAS.forEach((m) => {
+    const acc = el('details', 'guia-acc musica');
+    const sum = document.createElement('summary');
+    sum.append(el('span', `guia-ic ${m.dormir ? 'tint-sleep' : 'tint-lamp'}`, m.dormir ? '🌙' : '🎈'));
+    const txt = el('div', 'guia-card-txt');
+    const titulo = el('b');
+    titulo.textContent = m.titulo;
+    txt.append(titulo, el('span', 'guia-prev', m.dormir ? 'Para ninar' : 'Para cantar e brincar'));
+    sum.append(txt, el('span', 'guia-seta', '›'));
+    const letra = el('p', 'musica-letra');
+    letra.textContent = m.letra;
+    acc.append(sum, playerMusica(m), letra);
+    listas[m.lingua].append(acc);
+  });
+}
+
 /* ================================================================ EVOLUÇÃO */
 
 const MEDIDAS = [
@@ -2051,6 +2097,7 @@ function render() {
 
   if (viewAtual === 'agora') renderAgora();
   else if (viewAtual === 'remedios') renderRemedios();
+  else if (viewAtual === 'atividades') renderAtividades();
   else if (viewAtual === 'evolucao') renderEvolucao();
   else if (viewAtual === 'ajustes') renderAjustes();
 }
