@@ -309,6 +309,13 @@ try {
   await page.click('#musicasPt .musica summary >> nth=0');
   checar((await page.locator('#musicasPt .musica-letra').first().textContent()).includes('Nana, neném'),
     'abrir a música deveria mostrar a letra');
+  // o player do Spotify só entra no toque, com a faixa oficial daquela música
+  checar(await page.locator('#view-atividades iframe').count() === 0, 'nenhum player deveria carregar antes do toque');
+  checar(await page.locator('#view-atividades .musica-play').count() === 15, 'toda música deveria ter o botão de ouvir');
+  await page.route('https://open.spotify.com/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await page.click('#musicasPt .musica-play >> nth=0');
+  const src = await page.getAttribute('#musicasPt .musica-spotify', 'src');
+  checar(/^https:\/\/open\.spotify\.com\/embed\/track\/[A-Za-z0-9]{22}/.test(src || ''), `player do Spotify com src errado: ${src}`);
   // trocar de aba e voltar não pode redesenhar (nem duplicar) a lista
   await page.click('.tab[data-view="agora"]');
   await page.click('.tab[data-view="atividades"]');

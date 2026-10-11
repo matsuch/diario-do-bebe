@@ -1694,6 +1694,26 @@ function renderGuia() {
 
 let musicasDesenhadas = false;
 
+/**
+ * Botão que troca por um player do Spotify embutido, sem sair do app. O iframe só
+ * entra no toque: 15 players carregando de cara pesariam a tela e gastariam dados.
+ * Sem login Premium no navegador, o Spotify toca só uma prévia de 30 segundos.
+ */
+function playerMusica(m) {
+  const btn = el('button', 'btn btn-ghost block musica-play', `▶ Ouvir no Spotify · ${m.artista}`);
+  btn.type = 'button';
+  btn.addEventListener('click', () => {
+    vibrar();
+    const frame = el('iframe', 'musica-spotify');
+    frame.src = `https://open.spotify.com/embed/track/${m.spotify}?utm_source=generator`;
+    frame.title = `${m.titulo} — ${m.artista} no Spotify`;
+    frame.loading = 'lazy';
+    frame.allow = 'autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture';
+    btn.replaceWith(frame);
+  });
+  return btn;
+}
+
 /** Músicas em sanfona (mesmo visual das categorias do Guia), desenhadas uma vez. */
 function renderAtividades() {
   if (musicasDesenhadas) return;
@@ -1710,7 +1730,7 @@ function renderAtividades() {
     sum.append(txt, el('span', 'guia-seta', '›'));
     const letra = el('p', 'musica-letra');
     letra.textContent = m.letra;
-    acc.append(sum, letra);
+    acc.append(sum, playerMusica(m), letra);
     listas[m.lingua].append(acc);
   });
 }

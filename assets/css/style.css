@@ -483,6 +483,11 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .guia-acc[open] > summary .guia-seta { transform: rotate(-90deg); }
 .guia-acc[open] { border-color: var(--line); }
 
+/* Atividades: player do Spotify (152px é a altura do embed compacto com capa) */
+.musica-spotify {
+  display: block; width: 100%; height: 152px; border: 0;
+  border-radius: 12px; margin-top: var(--sp-tight);
+}
 /* Atividades: letra de música, verso por linha */
 .musica-letra {
   margin: var(--sp-tight) 0 0; white-space: pre-line;
