@@ -69,15 +69,11 @@
     <p class="disclaimer">Alertas por intervalo: remédios, vacinas, consultas, etc. O app só lembra os horários que você configurar — dose, intervalo e duração do tratamento seguem a prescrição médica.</p>
   </section>
 
-  <!-- ============ DIÁRIO ============ -->
-  <section class="view" id="view-diario" hidden>
-    <h2 class="section-title">Hoje</h2>
-    <div class="today-grid" id="dayGrid"></div>
-    <h2 class="section-title">Últimos 7 dias</h2>
-    <div class="stack">
-      <div id="chartSono"></div>
-      <div id="chartXixi"></div>
-      <div id="chartCoco"></div>
+  <!-- ============ ATIVIDADES ============ -->
+  <section class="view" id="view-atividades" hidden>
+    <div class="card guia-vazio" id="atividadesVazio">
+      <b>Atividades</b>
+      <p class="muted small">Em breve, um espaço para as atividades do dia a dia com o bebê.</p>
     </div>
   </section>
 
@@ -88,19 +84,29 @@
          tela. Sem div de embrulho de propósito: só filho direto herda o ritmo
          vertical (--sp-tight / --sp-block / --sp-section) que vale em todas as
          abas — dentro de um wrapper os blocos ficariam colados. -->
-    <!-- Duas abas: "Guia" (padrão, o texto explicativo da fase) e "Registros"
-         (peso/altura e a rotina). A tela alterna pelo data-sub; os blocos do
-         guia (data-guia) e os de registro (.evo-registro) seguem como filhos
-         diretos para manter o ritmo vertical. -->
+    <!-- Três abas: "Guia" (padrão, o texto explicativo da fase), "Registros"
+         (peso/altura e a rotina) e "Diário" (hoje + gráficos de 7 dias). A tela
+         alterna pelo data-sub; os blocos do guia (data-guia), de registro
+         (.evo-registro) e do diário (.evo-diario) seguem como filhos diretos
+         para manter o ritmo vertical. -->
     <div class="subtabs" role="tablist" aria-label="Evolução">
       <button class="subtab is-active" id="evoTabGuia" data-evo="guia" role="tab" aria-selected="true" type="button">Guia</button>
       <button class="subtab" id="evoTabRegistros" data-evo="registro" role="tab" aria-selected="false" type="button">Registros</button>
+      <button class="subtab" id="evoTabDiario" data-evo="diario" role="tab" aria-selected="false" type="button">Diário</button>
     </div>
     <h2 class="section-title evo-registro" id="guiaAncora">Crescimento</h2>
     <div class="measure-grid evo-registro" id="medidaGrid"></div>
     <button class="btn btn-ghost block evo-registro" id="btnMedida" type="button">Registrar peso e altura</button>
     <div class="evo-registro" id="evolucaoRotina"></div>
     <p class="muted small center evo-registro" id="evolucaoNota"></p>
+    <h2 class="section-title evo-diario">Hoje</h2>
+    <div class="today-grid evo-diario" id="dayGrid"></div>
+    <h2 class="section-title evo-diario">Últimos 7 dias</h2>
+    <div class="stack evo-diario">
+      <div id="chartSono"></div>
+      <div id="chartXixi"></div>
+      <div id="chartCoco"></div>
+    </div>
   </section>
 
   <!-- ============ AJUSTES ============ -->
@@ -224,9 +230,9 @@
 
 <nav class="tabbar">
   <button class="tab is-active" data-view="agora"><span>🏠</span>Início</button>
-  <button class="tab" data-view="remedios"><span>🔔</span>Alertas</button>
-  <button class="tab" data-view="diario"><span>📔</span>Diário</button>
+  <button class="tab" data-view="atividades"><span>🧸</span>Atividades</button>
   <button class="tab" data-view="evolucao"><span>📈</span>Evolução</button>
+  <button class="tab" data-view="remedios"><span>🔔</span>Alertas</button>
 </nav>
 
 <div class="sheet-backdrop" id="sheetBackdrop" hidden>
