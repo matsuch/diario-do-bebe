@@ -1,5 +1,5 @@
 /* Service worker: deixa o app abrir offline (madrugada, dados ruins, avião). */
-const CACHE = 'rotina-bebe-v44';
+const CACHE = 'rotina-bebe-v46';
 const ARQUIVOS = [
   './',
   './index.html',

@@ -476,7 +476,7 @@ function heroMarcador({ tipo, r = HERO.rMarca, escala = 1.2, ghost = false, i = 
 }
 
 /** Monta o SVG do herói do zero (só quando os dados mudam). */
-function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
+function montarHero(container, { foco, inicio, fim, feeds, segs, burps, passado = false }) {
   container.innerHTML = '';
   const cor = foco.tone === 'lamp' ? 'var(--accent)' : 'var(--sleep)';
   const { cx, cy, R, faixa, rLabel, vb } = HERO;
@@ -510,7 +510,7 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
 
   // sono EM ANDAMENTO: mesmo lavanda, crescendo até "agora" (atualizado no tick),
   // para que "roxo = dormindo" valha também durante a soneca atual.
-  const liveArc = state.activeSleep ? svgEl('path', { class: 'hero-sleep is-live', d: '' }) : null;
+  const liveArc = state.activeSleep && !passado ? svgEl('path', { class: 'hero-sleep is-live', d: '' }) : null;
   if (liveArc) svg.append(liveArc);
 
   // eventos pontuais sobre a órbita (prioridade: próximo > mamada > acordou > arroto)
@@ -555,6 +555,14 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
     txt.textContent = fmtTime(L.t);
     svg.append(txt);
   });
+
+  // Dia que já passou: só a órbita (sem "agora" e sem texto no centro).
+  if (passado) {
+    container.append(svg);
+    container.__nowG = null; container.__tl = null; container.__tb = null; container.__ts = null;
+    container.__liveArc = null;
+    return;
+  }
 
   // AGORA: cabeçote cruzando a faixa (desenhado no topo e rotacionado no tick)
   const nowG = svgEl('g', { class: 'hero-now-g' });
@@ -677,6 +685,19 @@ function renderAgora() {
   renderRegistros();
 }
 
+/** Órbita de um dia que já passou (sono e mamadas), sem nada escrito no centro. */
+function renderOrbitaDia(container, ref) {
+  const [inicio, fim] = S.dayBounds(ref);
+  const doDia = S.daySummary(ref).eventos;
+  const feeds = doDia.filter((e) => e.type === 'feed');
+  const burps = doDia.filter((e) => e.type === 'burp');
+  const segs = S.sleepSegmentsInDay(ref);
+  const sig = JSON.stringify({ i: inicio, f: feeds.map((e) => e.at), b: burps.map((e) => e.at), s: segs.map((x) => [x.at, x.endAt]) });
+  if (container.__sig === sig) return;
+  container.__sig = sig;
+  montarHero(container, { foco: {}, inicio, fim, feeds, segs, burps, passado: true });
+}
+
 /** Bloco "Registros" da Home: navegação por dia, totais do dia escolhido e linha do tempo. */
 function renderRegistros() {
   const ref = refDia();
@@ -684,6 +705,11 @@ function renderRegistros() {
     : diaDiario === -1 ? 'Ontem'
     : ref.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
   $('#dayNext').disabled = diaDiario >= 0;
+
+  // Dias passados ganham a mesma órbita do topo (a de hoje já é o herói).
+  const orbita = $('#dayOrbita');
+  orbita.hidden = diaDiario === 0;
+  if (!orbita.hidden) renderOrbitaDia(orbita, ref);
 
   // Os totais e a barra de sono acompanham o dia escolhido (hoje, ontem…).
   renderResumo($('#todayGrid'), S.daySummary(ref));
@@ -1471,6 +1497,47 @@ function guiaSemData() {
   return [card];
 }
 
+/**
+ * Ilustração do herói do guia: bebê dormindo numa lua, com estrelinhas.
+ * SVG inline (funciona offline e herda as cores do tema); decorativa.
+ */
+function ilustracaoBebe() {
+  const wrap = el('div', 'guia-ilustra');
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.innerHTML = `<svg viewBox="0 0 96 96" width="88" height="88">
+    <circle cx="48" cy="48" r="44" class="il-halo"/>
+    <path class="il-lua" d="M62 18a32 32 0 1 0 18 45A26 26 0 0 1 62 18z"/>
+    <circle cx="40" cy="50" r="15" class="il-rosto"/>
+    <path class="il-cabelo" d="M33 37c3-5 11-6 15-2-3-1-6 0-8 2"/>
+    <path class="il-olho" d="M33 50q2.5 2.2 5 0M42.5 50q2.5 2.2 5 0"/>
+    <circle cx="33" cy="55.5" r="2.4" class="il-bochecha"/>
+    <circle cx="47.5" cy="55.5" r="2.4" class="il-bochecha"/>
+    <path class="il-boca" d="M38.5 58.5q1.7 1.4 3.4 0"/>
+    <path class="il-manta" d="M22 66c8-6 22-7 34-2 6 3 9 7 10 11-12 6-31 7-44-1-1-3-1-6 0-8z"/>
+    <path class="il-estrela" d="M78 22l1.6 3.4 3.4 1.6-3.4 1.6L78 32l-1.6-3.4-3.4-1.6 3.4-1.6z"/>
+    <circle cx="20" cy="26" r="1.8" class="il-ponto"/>
+    <circle cx="84" cy="48" r="1.4" class="il-ponto"/>
+    <text x="64" y="40" class="il-z">z</text><text x="70" y="32" class="il-z il-z2">z</text>
+  </svg>`;
+  return wrap;
+}
+
+/** Barra de quanto da fase já passou (dias), com rótulo legível em texto. */
+function barraFase(dias, fase) {
+  const total = Math.max(1, fase.ate - fase.de + 1);
+  const feito = Math.min(total, Math.max(0, dias - fase.de + 1));
+  const barra = el('div', 'guia-progresso');
+  barra.setAttribute('role', 'progressbar');
+  barra.setAttribute('aria-label', 'Quanto desta fase já passou');
+  barra.setAttribute('aria-valuemin', '0');
+  barra.setAttribute('aria-valuemax', String(total));
+  barra.setAttribute('aria-valuenow', String(feito));
+  const fill = el('span', 'guia-progresso-fill');
+  fill.style.width = `${Math.round((feito / total) * 100)}%`;
+  barra.append(fill);
+  return barra;
+}
+
 /** "Hoje seu bebê está com X" — ou o aviso de que você está espiando outra fase. */
 function cardIdade(dias, fase, faseHoje) {
   const espiando = fase.id !== faseHoje.id;
@@ -1482,8 +1549,12 @@ function cardIdade(dias, fase, faseHoje) {
     card.append(el('b', 'guia-idade', fase.titulo));
     card.append(el('span', 'guia-dias', `Seu bebê está com ${GUIA.idadeTexto(dias)} — ${faseHoje.titulo}`));
   } else {
-    card.append(el('span', 'guia-kicker', 'Hoje seu bebê está com'));
-    card.append(el('b', 'guia-idade', GUIA.idadeTexto(dias)));
+    const topo = el('div', 'guia-hero-top');
+    const txt = el('div', 'guia-hero-txt');
+    txt.append(el('span', 'guia-kicker', 'Hoje seu bebê está com'));
+    txt.append(el('b', 'guia-idade', GUIA.idadeTexto(dias)));
+    topo.append(txt, ilustracaoBebe());
+    card.append(topo);
     // A idade (semanas COMPLETAS) e o nome da fase (a semana que ele está
     // vivendo) são dois números diferentes do mesmo dia: aos 35 dias são
     // "5 semanas" e a "6ª semana". Lado a lado na mesma linha isso confunde,
@@ -1492,6 +1563,7 @@ function cardIdade(dias, fase, faseHoje) {
     const falta = GUIA.diasAteProximaFase(dias);
     if (falta != null) detalhe.push(falta === 1 ? 'muda de fase amanhã' : `faltam ${falta} dias para a próxima fase`);
     card.append(el('span', 'guia-dias', detalhe.join(' · ')));
+    card.append(barraFase(dias, faseHoje));
   }
 
   const cabeca = el('div', 'guia-titulo-bloco');
@@ -1543,23 +1615,31 @@ function centralizarRegua(regua) {
 function cardSalto(salto) {
   const card = el('div', 'card guia-salto');
   card.append(topoGuia('✨', 'tint-sleep', `Período de salto · ${salto.semanas}`, salto.titulo));
-  card.append(el('p', 'guia-nota',
+  // Texto longo recolhido: o cabeçalho já diz o essencial; quem quiser abre.
+  const mais = el('details', 'guia-mais');
+  const sum = document.createElement('summary');
+  sum.append(el('span', null, 'Ver o que você pode perceber'), el('span', 'guia-seta', '›'));
+  mais.append(sum);
+  mais.append(el('p', 'guia-nota',
     'Alguns bebês ficam mais irritados, pedem mais colo ou mudam o sono enquanto uma habilidade '
     + 'nova amadurece. Isso não acontece da mesma maneira com todos os bebês, e muitos passam '
     + 'por esta fase sem nada disso — não é um evento médico nem um calendário exato.'));
-  card.append(el('b', 'guia-sub', 'O que você pode perceber'));
-  card.append(listaGuia(salto.perceber));
-  card.append(el('b', 'guia-sub', 'O que pode estar acontecendo'));
-  card.append(el('p', 'guia-p', salto.amadurecendo));
+  mais.append(el('b', 'guia-sub', 'O que você pode perceber'));
+  mais.append(listaGuia(salto.perceber));
+  mais.append(el('b', 'guia-sub', 'O que pode estar acontecendo'));
+  mais.append(el('p', 'guia-p', salto.amadurecendo));
+  card.append(mais);
   return card;
 }
 
 /** "O que seu bebê pode estar sentindo": cards curtos, linguagem de cuidado. */
 function cardsSentindo(fase) {
   const grade = el('div', 'guia-sent-grid');
-  fase.sentindo.forEach((s) => {
+  const icones = [['💭', 'tint-sleep'], ['🤍', 'tint-lamp'], ['🌙', 'tint-med']];
+  fase.sentindo.forEach((s, i) => {
     const c = el('div', 'card guia-sent');
-    c.append(el('b', null, s.titulo));
+    const [emoji, tint] = icones[i % icones.length];
+    c.append(topoGuia(emoji, tint, s.titulo));
     c.append(el('p', 'guia-p', s.texto));
     grade.append(c);
   });
@@ -1603,14 +1683,17 @@ function cardAtencao(fase, dias) {
     'Esta aba não diagnostica nada — ela ajuda a saber a hora de perguntar.'));
   card.append(el('p', 'guia-ok',
     'Tudo o que está acima é o que costuma ser comum nesta fase e varia bastante de bebê para bebê.'));
-  card.append(el('b', 'guia-sub', 'Converse com o pediatra se'));
-  card.append(listaGuia(fase.atencao));
-
+  // O que pede atendimento no mesmo dia vem antes e em caixa própria: é o que
+  // não pode passar batido numa leitura rápida.
   const urgente = GUIA.urgenteParaIdade(dias);
   if (urgente) {
-    card.append(el('b', 'guia-sub is-urgente', urgente.titulo));
-    card.append(listaGuia(urgente.itens, 'is-urgente'));
+    const caixa = el('div', 'guia-urgente');
+    caixa.append(el('b', 'guia-sub is-urgente', `⚠️ ${urgente.titulo}`));
+    caixa.append(listaGuia(urgente.itens, 'is-urgente'));
+    card.append(caixa);
   }
+  card.append(el('b', 'guia-sub', 'Converse com o pediatra se'));
+  card.append(listaGuia(fase.atencao));
   return card;
 }
 
@@ -1737,6 +1820,31 @@ function renderAtividades() {
 
 /* ================================================================ EVOLUÇÃO */
 
+/**
+ * Medidor da faixa da OMS: a trilha mostra a faixa esperada (P3–P97) e a
+ * bolinha marca onde a medida caiu. Os números ficam em texto embaixo, então
+ * a cor nunca é a única informação.
+ */
+function medidorFaixa(valor, r, m) {
+  const span = r.p97 - r.p3;
+  const lo = r.p3 - span * 0.25;
+  const hi = r.p97 + span * 0.25;
+  const pos = (v) => `${Math.min(100, Math.max(0, ((v - lo) / (hi - lo)) * 100)).toFixed(1)}%`;
+  const wrap = el('div', 'faixa');
+  const trilha = el('div', 'faixa-trilha');
+  const zona = el('span', 'faixa-zona');
+  zona.style.left = pos(r.p3);
+  zona.style.right = `calc(100% - ${pos(r.p97)})`;
+  const ponto = el('span', `faixa-ponto is-${r.faixa}`);
+  ponto.style.left = pos(valor);
+  trilha.append(zona, ponto);
+  const eixo = el('div', 'faixa-eixo');
+  eixo.append(el('span', null, `${num(r.p3, m.faixa)}${m.unidade}`), el('span', null, 'esperado'),
+    el('span', null, `${num(r.p97, m.faixa)}${m.unidade}`));
+  wrap.append(trilha, eixo);
+  return wrap;
+}
+
 const MEDIDAS = [
   // casas: o valor medido (a balança dá gramas); faixa: a curva, onde 1 casa basta.
   { campo: 'weightKg', ind: 'peso', emoji: '⚖️', rotulo: 'Peso', unidade: 'kg', casas: 2, faixa: 1 },
@@ -1779,7 +1887,7 @@ function renderEvolucao() {
     const r = CRESC.avaliar(m.ind, ev[m.campo], sex, S.ageDays(ev.at));
     if (r) {
       card.append(el('span', `chip-faixa is-${r.faixa}`, `P${Math.round(r.percentil)} · ${FAIXA_TEXTO[r.faixa]}`));
-      card.append(el('span', 'measure-sub', `esperado ${num(r.p3, m.faixa)}–${num(r.p97, m.faixa)}${m.unidade}`));
+      card.append(medidorFaixa(ev[m.campo], r, m));
     }
     grid.append(card);
   });
@@ -1835,6 +1943,17 @@ function renderEvolucaoRotina(container) {
       const alvo = ref.max ? `${fmt(ref.min)}–${fmt(ref.max)}` : `mín. ${fmt(ref.min)}`;
       const ok = valor >= ref.min - 0.05 && (!ref.max || valor <= ref.max + 0.05);
       linha.append(el('span', `chip-faixa is-${ok ? 'esperado' : 'atencao'}`, alvo));
+      // Barrinha: quanto da meta o dia médio alcança (a marca é o mínimo/faixa).
+      const teto = Math.max(valor, ref.max ? ref.max * 1.15 : ref.min * 1.6) || 1;
+      const barra = el('div', 'evo-barra');
+      const meta = el('span', 'evo-meta');
+      meta.style.left = `${(ref.min / teto) * 100}%`;
+      meta.style.right = ref.max ? `${100 - (ref.max / teto) * 100}%` : '0';
+      const fill = el('span', `evo-fill is-${ok ? 'esperado' : 'atencao'}`);
+      fill.style.width = `${Math.min(100, (valor / teto) * 100)}%`;
+      barra.append(meta, fill);
+      card.append(linha, barra);
+      return;
     }
     card.append(linha);
   });
