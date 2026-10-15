@@ -215,8 +215,13 @@ try {
   checar((await page.locator('#dayLabel').textContent()).trim() === 'Ontem', 'seletor não mostrou "Ontem"');
   const totalOntem = (await page.locator('#todayGrid .stat').allTextContents()).join('|');
   checar(totalOntem !== totalHoje && totalOntem.startsWith("0🍼"), `totais não acompanharam o dia anterior (${totalOntem})`);
-  checar(await page.locator('.clock-wrap, #dayClock, .clock').count() === 0, 'o gráfico do dia anterior não deveria existir');
+  checar(await page.locator('.clock-wrap, #dayClock, .clock').count() === 0, 'o relógio antigo do dia não deveria existir');
+  // Dia passado ganha a mesma órbita do topo, só que sem texto no centro e sem o "agora".
+  checar(await page.locator('#dayOrbita .hero-ring').isVisible(), 'a órbita do dia passado não apareceu');
+  checar(await page.locator('#dayOrbita .hero-big, #dayOrbita .hero-label, #dayOrbita .hero-now-g').count() === 0,
+    'a órbita do dia passado não deveria ter texto no centro nem o marcador de agora');
   await page.click('#dayNext');
+  checar(await page.locator('#dayOrbita').isHidden(), 'em "hoje" a órbita extra deveria sumir (o herói já mostra o dia)');
   await shot('agora.png');
 
   // com nascimento e sexo, as curvas da OMS entram e os gráficos ganham meta.

@@ -476,7 +476,7 @@ function heroMarcador({ tipo, r = HERO.rMarca, escala = 1.2, ghost = false, i = 
 }
 
 /** Monta o SVG do herói do zero (só quando os dados mudam). */
-function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
+function montarHero(container, { foco, inicio, fim, feeds, segs, burps, passado = false }) {
   container.innerHTML = '';
   const cor = foco.tone === 'lamp' ? 'var(--accent)' : 'var(--sleep)';
   const { cx, cy, R, faixa, rLabel, vb } = HERO;
@@ -510,7 +510,7 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
 
   // sono EM ANDAMENTO: mesmo lavanda, crescendo até "agora" (atualizado no tick),
   // para que "roxo = dormindo" valha também durante a soneca atual.
-  const liveArc = state.activeSleep ? svgEl('path', { class: 'hero-sleep is-live', d: '' }) : null;
+  const liveArc = state.activeSleep && !passado ? svgEl('path', { class: 'hero-sleep is-live', d: '' }) : null;
   if (liveArc) svg.append(liveArc);
 
   // eventos pontuais sobre a órbita (prioridade: próximo > mamada > acordou > arroto)
@@ -555,6 +555,14 @@ function montarHero(container, { foco, inicio, fim, feeds, segs, burps }) {
     txt.textContent = fmtTime(L.t);
     svg.append(txt);
   });
+
+  // Dia que já passou: só a órbita (sem "agora" e sem texto no centro).
+  if (passado) {
+    container.append(svg);
+    container.__nowG = null; container.__tl = null; container.__tb = null; container.__ts = null;
+    container.__liveArc = null;
+    return;
+  }
 
   // AGORA: cabeçote cruzando a faixa (desenhado no topo e rotacionado no tick)
   const nowG = svgEl('g', { class: 'hero-now-g' });
@@ -677,6 +685,19 @@ function renderAgora() {
   renderRegistros();
 }
 
+/** Órbita de um dia que já passou (sono e mamadas), sem nada escrito no centro. */
+function renderOrbitaDia(container, ref) {
+  const [inicio, fim] = S.dayBounds(ref);
+  const doDia = S.daySummary(ref).eventos;
+  const feeds = doDia.filter((e) => e.type === 'feed');
+  const burps = doDia.filter((e) => e.type === 'burp');
+  const segs = S.sleepSegmentsInDay(ref);
+  const sig = JSON.stringify({ i: inicio, f: feeds.map((e) => e.at), b: burps.map((e) => e.at), s: segs.map((x) => [x.at, x.endAt]) });
+  if (container.__sig === sig) return;
+  container.__sig = sig;
+  montarHero(container, { foco: {}, inicio, fim, feeds, segs, burps, passado: true });
+}
+
 /** Bloco "Registros" da Home: navegação por dia, totais do dia escolhido e linha do tempo. */
 function renderRegistros() {
   const ref = refDia();
@@ -684,6 +705,11 @@ function renderRegistros() {
     : diaDiario === -1 ? 'Ontem'
     : ref.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
   $('#dayNext').disabled = diaDiario >= 0;
+
+  // Dias passados ganham a mesma órbita do topo (a de hoje já é o herói).
+  const orbita = $('#dayOrbita');
+  orbita.hidden = diaDiario === 0;
+  if (!orbita.hidden) renderOrbitaDia(orbita, ref);
 
   // Os totais e a barra de sono acompanham o dia escolhido (hoje, ontem…).
   renderResumo($('#todayGrid'), S.daySummary(ref));
