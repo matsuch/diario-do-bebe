@@ -166,7 +166,7 @@ teste('WAKE_WINDOWS: sonecas implicadas batem com os dados de Galland 2012', () 
 });
 
 /* ---- personalização e risco de irritação ---- */
-import { personalWakeWindow, recentFeedIntervalMin, predictedFeedAt, fussRisk, periodoDe } from '../assets/js/store.js';
+import { personalWakeWindow, recentFeedIntervalMin, predictedFeedAt, feedTargetAt, feedMode, fussRisk, periodoDe } from '../assets/js/store.js';
 
 function limpar() { state.events.length = 0; state.activeSleep = null; state.activeFeed = null; }
 const H = 3600000; const M = 60000;
@@ -201,6 +201,19 @@ teste('recentFeedIntervalMin / predictedFeedAt: usa o padrão recente', () => {
   for (let i = 8; i >= 1; i -= 1) addEvent({ type: 'feed', at: agora - i * 150 * M });
   assert.equal(recentFeedIntervalMin(), 150);
   assert.equal(predictedFeedAt(), agora - 150 * M + 150 * M);
+});
+
+teste('feedTargetAt segue o modo dos Ajustes (média × intervalo fixo)', () => {
+  limpar();
+  const agora = Date.now();
+  for (let i = 8; i >= 1; i -= 1) addEvent({ type: 'feed', at: agora - i * 150 * M, endAt: agora - i * 150 * M + 20 * M });
+  const ultima = agora - 150 * M;
+  assert.equal(feedMode(), 'media', 'padrão é a média');
+  assert.equal(feedTargetAt(), ultima + 150 * M);
+  state.settings.feedMode = 'intervalo';
+  assert.equal(feedTargetAt(), ultima + 20 * M + state.settings.feedIntervalMin * M);
+  delete state.settings.feedMode;
+  assert.equal(feedMode(), 'media', 'sem configuração (perfil antigo) volta para a média');
 });
 
 teste('predictedFeedAt sem histórico cai no intervalo configurado', () => {

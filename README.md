@@ -29,7 +29,7 @@ celulares e avisos automáticos são opcionais.
 | **Remédios** | Cada remédio com seu intervalo. "Tomei agora" recalcula a próxima dose sozinho. Já vem com Cefalexina 6h, Paracetamol 8h e Profenid 12h — é só editar ou apagar. |
 | **Diário** | Só gráficos: os números de hoje e três barras dos **últimos 7 dias** — sono, xixis e cocôs — com o valor de cada dia rotulado. |
 | **Evolução** | Um **guia personalizado da fase do bebê**, calculado pela data de nascimento: "hoje seu bebê está com 5 semanas" e, embaixo, o que costuma acontecer agora em **seis áreas** (desenvolvimento, sono, comportamento, corpo e aparência, alimentação e sentidos), **o que ele pode estar sentindo**, **o que você pode fazer** e **quando procurar orientação** — com a rede de segurança de urgência enquanto o bebê é pequeno. Nas primeiras 8 semanas o guia é **semana a semana**; depois abre em meses e faixas. Uma **régua de fases** deixa espiar o que vem antes e depois. Quando a idade cai numa janela de **salto de desenvolvimento**, entra um card explicando o que os pais podem perceber — sempre como possibilidade, nunca como calendário exato (veja abaixo). Mais abaixo continuam **peso e altura** com o **percentil da curva da OMS** para a idade e o sexo, e a média de xixis, cocôs e sono dos últimos 7 dias comparada com a referência da idade. Onde não há referência honesta — a frequência de cocô depois das primeiras semanas — o app diz "sem meta" em vez de inventar uma. **Referências gerais: não é conselho médico.** |
-| **Ajustes** | Na **engrenagem do canto superior direito**, disponível em qualquer aba: nome e nascimento do bebê, intervalo entre mamadas, avisos, **notificações no WhatsApp** e backup dos dados. |
+| **Ajustes** | Na **engrenagem do canto superior direito**, disponível em qualquer aba: nome e nascimento do bebê, **como prever a próxima mamada** (pela média recente ou por intervalo fixo), avisos, sincronização, push pelo ntfy e backup dos dados. |
 
 ## De onde vem o conteúdo do guia de fases
 
@@ -82,25 +82,6 @@ A forma mais fácil de receber os avisos como **push**, inclusive de madrugada, 
 > compartilhe. Registrar uma mamada fora do horário previsto pode fazer um aviso já
 > agendado chegar no horário antigo (o ntfy não cancela agendados); por isso o botão
 > é para programar a noite pouco antes de dormir.
-
-## Notificações no WhatsApp (opcional, mais trabalhoso)
-
-Em **Ajustes → Avisar no WhatsApp** dá para mandar os lembretes de mamada e remédio
-(e o resumo do dia) para o seu WhatsApp e o do parceiro(a), usando uma API
-**não-oficial** — [WAHA](https://waha.devlike.pro/) ou
-[Evolution API](https://github.com/EvolutionAPI/evolution-api).
-
-Como o app é estático (não roda com o celular bloqueado), há **duas camadas**:
-
-- **No app** — enquanto aberto, envia o teste, o resumo e o aviso junto da notificação.
-- **Worker 24/7** (`server/`) — recebe a agenda do app e dispara os lembretes na hora
-  certa, inclusive de madrugada. É o que fecha o buraco da notificação com o app fechado.
-
-O passo a passo de instalação numa VPS (Docker + WAHA/Evolution + HTTPS) está em
-**[`server/README.md`](server/README.md)**.
-
-> ⚠️ APIs não-oficiais do WhatsApp podem levar ao **bloqueio do número**. Use por sua
-> conta e risco, de preferência com um chip dedicado.
 
 ## Como usar no celular
 
@@ -202,7 +183,6 @@ npm install        # só para os testes (baixa o Playwright)
 npm test           # abre um Chromium e percorre os fluxos principais
 SHOTS=1 npm test   # o mesmo, salvando telas em tests/screenshots/
 npm run icons      # regera os ícones PNG (script Python sem dependências)
-node server/test.mjs   # testa o worker e o adaptador de WhatsApp (sem rede)
 ```
 
 ## Estrutura
@@ -215,7 +195,6 @@ assets/js/format.js        formatação de horas, durações e contagens regress
 assets/js/fases.js         guia por fase: conteúdo por idade, saltos e fontes
 assets/js/app.js           renderização das telas, interações e avisos
 assets/js/ntfy.js          push simples via ntfy.sh (imediato e agendado)
-assets/js/wa.js            adaptador de WhatsApp (WAHA/Evolution) — usado no app e no worker
 assets/js/sync.js          sincronização entre celulares (cliente do /api/sync)
 api/sync.js                função serverless da Vercel (sincroniza via Neon)
 api/cron.js                função serverless que envia os avisos automáticos
@@ -230,11 +209,18 @@ tests/smoke.mjs            teste de fumaça ponta a ponta (UI no navegador)
 tests/fases.test.mjs       cobertura por idade, fontes e linguagem do guia de fases
 tests/sync.test.mjs        testes do sync (núcleo + helpers do cliente)
 tests/sync-e2e.mjs         dois "celulares" sincronizando ponta a ponta
-server/                    worker 24/7 de WhatsApp + Docker (veja server/README.md)
-  worker.mjs               recebe a agenda e dispara os lembretes na hora
-  docker-compose.yml       WAHA + worker
-  test.mjs                 testes do worker e do adaptador (sem rede)
 ```
+
+A próxima mamada tem **dois modos**, escolhidos em Ajustes → Mamadas:
+
+- **Pela média** (padrão) — segue o ritmo real do bebê: a mediana dos intervalos
+  entre o início das mamadas nos últimos 7 dias, separada por período (dia, noite e
+  madrugada). Enquanto não há histórico suficiente, vale o intervalo configurado.
+- **Intervalo fixo** — o intervalo configurado conta a partir do fim da última
+  mamada, como no "acordar de 3 em 3 horas" dos primeiros dias.
+
+O modo vale para tudo: o card da Início, a agenda do dia e os avisos (no app e pelo
+servidor).
 
 Os horários (próxima mamada, próxima dose) nunca são gravados: são sempre calculados
 a partir do último registro. Assim, atrasar ou adiantar uma dose reajusta o resto sozinho.

@@ -69,16 +69,16 @@
     <p class="disclaimer">Alertas por intervalo: remédios, vacinas, consultas, etc. O app só lembra os horários que você configurar — dose, intervalo e duração do tratamento seguem a prescrição médica.</p>
   </section>
 
-  <!-- ============ DIÁRIO ============ -->
-  <section class="view" id="view-diario" hidden>
-    <h2 class="section-title">Hoje</h2>
-    <div class="today-grid" id="dayGrid"></div>
-    <h2 class="section-title">Últimos 7 dias</h2>
-    <div class="stack">
-      <div id="chartSono"></div>
-      <div id="chartXixi"></div>
-      <div id="chartCoco"></div>
-    </div>
+  <!-- ============ ATIVIDADES ============ -->
+  <section class="view" id="view-atividades" hidden>
+    <!-- Músicas: só a letra, para cantar junto. As sanfonas são montadas em JS
+         (musicas.js) uma vez só, para não fecharem a cada novo registro. -->
+    <h2 class="section-title">🎵 Músicas</h2>
+    <p class="muted small">Cantigas para cantar junto. Cantar ajuda na linguagem e no vínculo, e as de ninar (🌙) acalmam na hora de dormir. Toque em ▶ para ouvir a versão oficial no Spotify (precisa de internet).</p>
+    <h2 class="section-title">Em português</h2>
+    <div class="stack" id="musicasPt"></div>
+    <h2 class="section-title">Em inglês</h2>
+    <div class="stack" id="musicasEn"></div>
   </section>
 
   <!-- ============ EVOLUÇÃO ============ -->
@@ -88,19 +88,29 @@
          tela. Sem div de embrulho de propósito: só filho direto herda o ritmo
          vertical (--sp-tight / --sp-block / --sp-section) que vale em todas as
          abas — dentro de um wrapper os blocos ficariam colados. -->
-    <!-- Duas abas: "Guia" (padrão, o texto explicativo da fase) e "Registros"
-         (peso/altura e a rotina). A tela alterna pelo data-sub; os blocos do
-         guia (data-guia) e os de registro (.evo-registro) seguem como filhos
-         diretos para manter o ritmo vertical. -->
+    <!-- Três abas: "Guia" (padrão, o texto explicativo da fase), "Registros"
+         (peso/altura e a rotina) e "Diário" (hoje + gráficos de 7 dias). A tela
+         alterna pelo data-sub; os blocos do guia (data-guia), de registro
+         (.evo-registro) e do diário (.evo-diario) seguem como filhos diretos
+         para manter o ritmo vertical. -->
     <div class="subtabs" role="tablist" aria-label="Evolução">
       <button class="subtab is-active" id="evoTabGuia" data-evo="guia" role="tab" aria-selected="true" type="button">Guia</button>
       <button class="subtab" id="evoTabRegistros" data-evo="registro" role="tab" aria-selected="false" type="button">Registros</button>
+      <button class="subtab" id="evoTabDiario" data-evo="diario" role="tab" aria-selected="false" type="button">Diário</button>
     </div>
     <h2 class="section-title evo-registro" id="guiaAncora">Crescimento</h2>
     <div class="measure-grid evo-registro" id="medidaGrid"></div>
     <button class="btn btn-ghost block evo-registro" id="btnMedida" type="button">Registrar peso e altura</button>
     <div class="evo-registro" id="evolucaoRotina"></div>
     <p class="muted small center evo-registro" id="evolucaoNota"></p>
+    <h2 class="section-title evo-diario">Hoje</h2>
+    <div class="today-grid evo-diario" id="dayGrid"></div>
+    <h2 class="section-title evo-diario">Últimos 7 dias</h2>
+    <div class="stack evo-diario">
+      <div id="chartSono"></div>
+      <div id="chartXixi"></div>
+      <div id="chartCoco"></div>
+    </div>
   </section>
 
   <!-- ============ AJUSTES ============ -->
@@ -131,6 +141,7 @@
     </div>
 
     <div class="card">
+      <h3>Bebê</h3>
       <label class="field">
         <span>Nome do bebê</span>
         <input type="text" id="setName" placeholder="Bebê" autocomplete="off">
@@ -147,8 +158,20 @@
           <option value="male">Menino</option>
         </select>
       </label>
+    </div>
+
+    <div class="card">
+      <h3>Mamadas</h3>
+      <div class="field">
+        <span>Prever a próxima mamada</span>
+        <div class="seg" role="radiogroup" aria-label="Prever a próxima mamada">
+          <label class="seg-opt"><input type="radio" name="feedMode" value="media"><span>Pela média</span></label>
+          <label class="seg-opt"><input type="radio" name="feedMode" value="intervalo"><span>Intervalo fixo</span></label>
+        </div>
+      </div>
+      <p class="muted small" id="feedModeHint">—</p>
       <label class="field">
-        <span>Intervalo entre mamadas</span>
+        <span id="setIntervalLabel">Intervalo entre mamadas</span>
         <select id="setInterval">
           <option value="120">2 horas</option>
           <option value="150">2h30</option>
@@ -196,58 +219,8 @@
     </div>
 
     <div class="card">
-      <label class="switch">
-        <span>Avisar no WhatsApp</span>
-        <input type="checkbox" id="waEnabled">
-      </label>
-      <div id="waFields" hidden>
-        <label class="field">
-          <span>Serviço (API não-oficial)</span>
-          <select id="waProvider">
-            <option value="waha">WAHA</option>
-            <option value="evolution">Evolution API</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>URL do servidor</span>
-          <input type="url" id="waBaseUrl" placeholder="https://waha.seudominio.com" autocomplete="off" inputmode="url">
-        </label>
-        <label class="field">
-          <span>Chave da API</span>
-          <input type="password" id="waApiKey" placeholder="X-Api-Key / apikey" autocomplete="off">
-        </label>
-        <label class="field">
-          <span id="waSessionLabel">Sessão</span>
-          <input type="text" id="waSession" placeholder="default" autocomplete="off">
-        </label>
-        <label class="field">
-          <span>Números de destino</span>
-          <input type="text" id="waNumbers" placeholder="5511999998888, 5521988887777" autocomplete="off" inputmode="tel">
-        </label>
-        <label class="switch">
-          <span>Mandar junto com o aviso local</span>
-          <input type="checkbox" id="waOnReminder">
-        </label>
-        <label class="field">
-          <span>URL do worker 24/7 (opcional)</span>
-          <input type="url" id="waWorkerUrl" placeholder="https://worker.seudominio.com" autocomplete="off" inputmode="url">
-        </label>
-        <label class="field">
-          <span>Token do worker (opcional)</span>
-          <input type="password" id="waWorkerToken" placeholder="segredo compartilhado" autocomplete="off">
-        </label>
-        <div class="row-2">
-          <button class="btn btn-ghost" id="waTest" type="button">Enviar teste</button>
-          <button class="btn btn-ghost" id="waSendSummary" type="button">Enviar resumo</button>
-        </div>
-        <button class="btn btn-ghost block" id="waPush" type="button">Sincronizar agenda com o worker</button>
-        <p class="disclaimer">WAHA e Evolution são APIs <strong>não-oficiais</strong> do WhatsApp — usar por sua conta, com risco de bloqueio do número; prefira um chip dedicado. O worker 24/7 fica em <code>server/</code> e é quem envia os lembretes com o app fechado. Sem ele, o WhatsApp só sai com o app aberto.</p>
-      </div>
-    </div>
-
-    <div class="card">
       <h3>Backup</h3>
-      <p class="muted small">Tudo fica salvo só neste aparelho. Exporte de vez em quando ou para passar os dados para o outro celular.</p>
+      <p class="muted small">Os dados ficam salvos neste aparelho (e no servidor, se a sincronização estiver ligada). Exporte de vez em quando para guardar uma cópia ou passar tudo para outro celular.</p>
       <div class="row-2">
         <button class="btn btn-ghost" id="btnExport" type="button">Exportar</button>
         <button class="btn btn-ghost" id="btnImport" type="button">Importar</button>
@@ -261,9 +234,9 @@
 
 <nav class="tabbar">
   <button class="tab is-active" data-view="agora"><span>🏠</span>Início</button>
-  <button class="tab" data-view="remedios"><span>🔔</span>Alertas</button>
-  <button class="tab" data-view="diario"><span>📔</span>Diário</button>
+  <button class="tab" data-view="atividades"><span>🧸</span>Atividades</button>
   <button class="tab" data-view="evolucao"><span>📈</span>Evolução</button>
+  <button class="tab" data-view="remedios"><span>🔔</span>Alertas</button>
 </nav>
 
 <div class="sheet-backdrop" id="sheetBackdrop" hidden>

@@ -273,8 +273,12 @@ try {
 
   await shot('evolucao.png');
 
-  // diário: só gráficos — sono, xixis e cocôs dos últimos 7 dias
-  await page.click('.tab[data-view="diario"]');
+  // diário: virou a terceira aba da Evolução — só gráficos de sono, xixis e cocôs
+  checar(await page.locator('.tab[data-view="diario"]').count() === 0, 'Diário não deveria mais ser uma aba do menu');
+  await page.click('.tab[data-view="evolucao"]');
+  await page.click('.subtab[data-evo="diario"]');
+  checar(!(await page.locator('#view-evolucao > .guia-hero').isVisible()), 'o Guia deveria sumir na aba Diário');
+  checar(!(await page.locator('#medidaGrid').isVisible()), 'os Registros deveriam sumir na aba Diário');
   checar(await page.locator('#chartSono .wc-meta').count() === 2, 'sono deveria ter as duas linhas de meta (mín. e máx.)');
   checar(await page.locator('#chartXixi .wc-meta').count() === 1, 'xixi deveria ter uma linha de meta (mínimo)');
   checar(await page.locator('#chartCoco .wc-meta').count() === 0, 'aos 43 dias cocô não deveria ter linha de meta');
@@ -292,35 +296,45 @@ try {
     }
   }
   checar(await page.locator('#dayGrid .stat').count() === 5, 'cards de hoje sumiram do Diário');
-  checar(await page.locator('#view-diario #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
+  checar(await page.locator('#view-evolucao #timeline').count() === 0, 'Diário deveria ser 100% gráficos');
   await shot('diario.png');
 
-  // config de WhatsApp: liga, preenche e testa o "Enviar teste" (fetch stubado)
+  // Atividades: músicas só com a letra, 10 em português e 5 em inglês
+  await page.click('.tab[data-view="atividades"]');
+  checar(!(await page.locator('#view-atividades').isHidden()), 'aba Atividades não abriu');
+  checar((await page.textContent('#topTitle')) === 'Atividades', 'título do topo deveria ser Atividades');
+  checar(await page.locator('#musicasPt .musica').count() === 10, 'deveria ter 10 músicas em português');
+  checar(await page.locator('#musicasEn .musica').count() === 5, 'deveria ter 5 músicas em inglês');
+  checar(!(await page.locator('#musicasPt .musica-letra').first().isVisible()), 'a letra deveria começar fechada');
+  await page.click('#musicasPt .musica summary >> nth=0');
+  checar((await page.locator('#musicasPt .musica-letra').first().textContent()).includes('Nana, neném'),
+    'abrir a música deveria mostrar a letra');
+  // o player do Spotify só entra no toque, com a faixa oficial daquela música
+  checar(await page.locator('#view-atividades iframe').count() === 0, 'nenhum player deveria carregar antes do toque');
+  checar(await page.locator('#view-atividades .musica-play').count() === 15, 'toda música deveria ter o botão de ouvir');
+  await page.route('https://open.spotify.com/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await page.click('#musicasPt .musica-play >> nth=0');
+  const src = await page.getAttribute('#musicasPt .musica-spotify', 'src');
+  checar(/^https:\/\/open\.spotify\.com\/embed\/track\/[A-Za-z0-9]{22}/.test(src || ''), `player do Spotify com src errado: ${src}`);
+  // trocar de aba e voltar não pode redesenhar (nem duplicar) a lista
+  await page.click('.tab[data-view="agora"]');
+  await page.click('.tab[data-view="atividades"]');
+  checar(await page.locator('#view-atividades .musica').count() === 15, 'a lista de músicas duplicou');
+  await shot('atividades.png');
+
+  // Ajustes: a integração com WhatsApp saiu; a previsão da mamada tem dois modos
   await page.click('#btnAjustes');
-  await page.check('#waEnabled');
-  checar(!(await page.locator('#waFields').isHidden()), 'campos de WhatsApp não apareceram ao ligar');
-  await page.selectOption('#waProvider', 'waha');
-  await page.fill('#waBaseUrl', 'https://waha.exemplo.com');
-  await page.fill('#waApiKey', 'chave-secreta');
-  await page.fill('#waSession', 'default');
-  await page.fill('#waNumbers', '5511999998888');
-  await page.evaluate(() => {
-    window.__wa = [];
-    window.fetch = async (url, opts) => {
-      window.__wa.push({ url, body: JSON.parse(opts.body), headers: opts.headers });
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
-    };
-  });
-  await page.click('#waTest');
-  await page.waitForFunction(() => window.__wa && window.__wa.length > 0, { timeout: 4000 });
-  const chamada = await page.evaluate(() => window.__wa[0]);
-  checar(chamada.url === 'https://waha.exemplo.com/api/sendText', `URL do WAHA errada: ${chamada.url}`);
-  checar(chamada.body.chatId === '5511999998888@c.us', `chatId errado: ${chamada.body.chatId}`);
-  checar(chamada.headers['X-Api-Key'] === 'chave-secreta', 'X-Api-Key não foi enviado');
-  const waSalvo = await page.evaluate(() =>
-    JSON.parse(localStorage.getItem('rotina-bebe:v1')).settings.wa);
-  checar(waSalvo.enabled === true && waSalvo.baseUrl === 'https://waha.exemplo.com',
-    'config de WhatsApp não persistiu');
+  checar(await page.locator('#waEnabled').count() === 0, 'WhatsApp deveria ter saído dos Ajustes');
+  checar(await page.locator('input[name="feedMode"][value="media"]').isChecked(), 'modo padrão deveria ser "Pela média"');
+  await page.check('input[name="feedMode"][value="intervalo"]');
+  const modoSalvo = await page.evaluate(() => JSON.parse(localStorage.getItem('rotina-bebe:v1')).settings);
+  checar(modoSalvo.feedMode === 'intervalo', 'modo "Intervalo fixo" não persistiu');
+  checar(!('wa' in modoSalvo), 'config antiga de WhatsApp deveria sumir do estado salvo');
+  checar((await page.textContent('#setIntervalLabel')).trim() === 'Intervalo entre mamadas', 'rótulo do intervalo não acompanhou o modo');
+  await page.click('.tab[data-view="agora"]');
+  checar((await page.textContent('#nextCards')).includes('intervalo fixo'), 'Home não mostrou que está no intervalo fixo');
+  await page.click('#btnAjustes');
+  await page.check('input[name="feedMode"][value="media"]');
 
   // config de ntfy: liga (gera tópico), testa envio e programa lembretes (fetch stubado)
   await page.check('#ntfyEnabled');
@@ -394,8 +408,10 @@ try {
     }
     return medidas;
   });
-  for (const aba of ['agora', 'remedios', 'diario', 'evolucao']) {
+  // o Diário agora é a terceira sub-aba da Evolução: mede ela também
+  for (const [aba, sub] of [['agora'], ['remedios'], ['atividades'], ['evolucao'], ['evolucao', 'diario']]) {
     await page.click(`.tab[data-view="${aba}"]`);
+    if (sub) await page.click(`.subtab[data-evo="${sub}"]`);
     await page.waitForTimeout(350); // deixa a animação de entrada da view terminar
     const medidas = await espacos();
     checar(medidas.length > 0, `não consegui medir o espaçamento da aba ${aba}`);
