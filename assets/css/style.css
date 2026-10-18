@@ -483,6 +483,11 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .guia-acc[open] > summary .guia-seta { transform: rotate(-90deg); }
 .guia-acc[open] { border-color: var(--line); }
 
+/* Atividades: filtro por momento esconde o card (o display da sanfona venceria o [hidden]) */
+.musica[hidden] { display: none; }
+/* os 5 filtros quebram linha em vez de rolar: "Banho" não pode ficar escondido */
+.musica-filtro { flex-wrap: wrap; }
+
 /* Atividades: player do Spotify (152px é a altura do embed compacto com capa) */
 .musica-spotify {
   display: block; width: 100%; height: 152px; border: 0;

@@ -9,7 +9,7 @@ import * as CRESC from './crescimento.js';
 import * as GUIA from './fases.js';
 import * as NTFY from './ntfy.js';
 import * as SYNC from './sync.js';
-import { MUSICAS } from './musicas.js';
+import { MUSICAS, MOMENTOS } from './musicas.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -1797,25 +1797,54 @@ function playerMusica(m) {
   return btn;
 }
 
-/** Músicas em sanfona (mesmo visual das categorias do Guia), desenhadas uma vez. */
+/** Mostra só as músicas do momento escolhido (null = todas), sem redesenhar. */
+function filtrarMusicas(momento) {
+  $$('#musicasFiltro .guia-chip').forEach((c) => {
+    const on = (c.dataset.momento || null) === momento;
+    c.classList.toggle('is-on', on);
+    c.setAttribute('aria-pressed', String(on));
+  });
+  $$('#musicasLista .musica').forEach((acc) => {
+    acc.hidden = Boolean(momento) && !acc.dataset.momentos.split(' ').includes(momento);
+  });
+}
+
+/**
+ * Músicas em sanfona (mesmo visual das categorias do Guia), desenhadas uma vez,
+ * com chips de momento no topo. Filtrar só esconde cards: player aberto e letra
+ * expandida continuam onde estavam.
+ */
 function renderAtividades() {
   if (musicasDesenhadas) return;
   musicasDesenhadas = true;
-  const listas = { pt: $('#musicasPt'), en: $('#musicasEn') };
+  const filtro = $('#musicasFiltro');
+  [{ id: null, rotulo: 'Todas' }, ...MOMENTOS].forEach((mo) => {
+    const chip = el('button', 'guia-chip', mo.emoji ? `${mo.emoji} ${mo.rotulo}` : mo.rotulo);
+    chip.type = 'button';
+    if (mo.id) chip.dataset.momento = mo.id;
+    chip.addEventListener('click', () => { vibrar(); filtrarMusicas(mo.id); });
+    filtro.append(chip);
+  });
+  const lista = $('#musicasLista');
   MUSICAS.forEach((m) => {
+    const principal = MOMENTOS.find((mo) => mo.id === m.momentos[0]);
     const acc = el('details', 'guia-acc musica');
+    acc.dataset.momentos = m.momentos.join(' ');
     const sum = document.createElement('summary');
-    sum.append(el('span', `guia-ic ${m.dormir ? 'tint-sleep' : 'tint-lamp'}`, m.dormir ? '🌙' : '🎈'));
+    sum.append(el('span', `guia-ic ${principal.tint}`, principal.emoji));
     const txt = el('div', 'guia-card-txt');
     const titulo = el('b');
     titulo.textContent = m.titulo;
-    txt.append(titulo, el('span', 'guia-prev', m.dormir ? 'Para ninar' : 'Para cantar e brincar'));
+    const rotulos = m.momentos.map((id) => MOMENTOS.find((mo) => mo.id === id).rotulo);
+    if (m.lingua === 'en') rotulos.push('em inglês');
+    txt.append(titulo, el('span', 'guia-prev', rotulos.join(' · ')));
     sum.append(txt, el('span', 'guia-seta', '›'));
     const letra = el('p', 'musica-letra');
     letra.textContent = m.letra;
     acc.append(sum, playerMusica(m), letra);
-    listas[m.lingua].append(acc);
+    lista.append(acc);
   });
+  filtrarMusicas(null);
 }
 
 /* ================================================================ EVOLUÇÃO */
