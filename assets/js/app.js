@@ -1563,7 +1563,8 @@ function cardIdade(dias, fase, faseHoje) {
     const falta = GUIA.diasAteProximaFase(dias);
     if (falta != null) detalhe.push(falta === 1 ? 'muda de fase amanhã' : `faltam ${falta} dias para a próxima fase`);
     card.append(el('span', 'guia-dias', detalhe.join(' · ')));
-    card.append(barraFase(dias, faseHoje));
+    // A última fase (2 anos ou mais) não tem fim: sem barra de progresso.
+    if (Number.isFinite(faseHoje.ate)) card.append(barraFase(dias, faseHoje));
   }
 
   const cabeca = el('div', 'guia-titulo-bloco');
